@@ -1,0 +1,7 @@
+ATTACK SCHEDULE
+======================================================================
+[ 1] Reconnaissance Scan                 @   1.0min  dur= 232s
+[ 2] Denial of Service                   @   7.2min  dur= 193s
+[ 3] Replay Attack                       @  12.6min  dur= 234s
+[ 4] pH Manipulation Attack              @  18.9min  dur= 323s
+[ 5] pH Manipulation Attack              @  25.9min  dur= 531s

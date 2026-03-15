@@ -1,0 +1,7 @@
+ATTACK SCHEDULE
+======================================================================
+[ 1] Reconnaissance Scan                 @   1.0min  dur= 235s
+[ 2] Replay Attack                       @   6.2min  dur= 226s
+[ 3] pH Manipulation Attack              @  12.7min  dur= 315s
+[ 4] Membrane Damage Attack              @  20.5min  dur= 495s
+[ 5] pH Manipulation Attack              @  30.1min  dur= 460s

@@ -1,0 +1,61 @@
+[2026-03-13 13:02:11] [INFO] ======================================================================
+[2026-03-13 13:02:11] [INFO] SWAT DATASET GENERATOR - FIXED VERSION
+[2026-03-13 13:02:11] [INFO] ======================================================================
+[2026-03-13 13:02:11] [INFO] Configuration:
+[2026-03-13 13:02:11] [INFO]   Total: 70 min
+[2026-03-13 13:02:11] [INFO]   Attack: 30 min
+[2026-03-13 13:02:11] [INFO]   Each attack: 5-10 min
+[2026-03-13 13:02:11] [INFO]   Network attacks: 3× each (DOS, Replay, Recon)
+[2026-03-13 13:02:11] [INFO] Generating attack schedule...
+[2026-03-13 13:02:11] [INFO] Schedule generated:
+[2026-03-13 13:02:11] [INFO]   Total duration: 4200s (70min)
+[2026-03-13 13:02:11] [INFO]   Total attack time: 1800s (30.0min)
+[2026-03-13 13:02:11] [INFO]   Number of attacks: 5
+[2026-03-13 13:02:11] [INFO] [SCHEDULE] [ 1] Reconnaissance Scan                 @   1.0min  dur= 269s
+[2026-03-13 13:02:11] [INFO] [SCHEDULE] [ 2] Replay Attack                       @   7.2min  dur= 255s
+[2026-03-13 13:02:11] [INFO] [SCHEDULE] [ 3] Valve Manipulation Attack           @  14.2min  dur= 449s
+[2026-03-13 13:02:11] [INFO] [SCHEDULE] [ 4] Slow Ramp Attack                    @  23.7min  dur= 521s
+[2026-03-13 13:02:11] [INFO] [SCHEDULE] [ 5] Valve Manipulation Attack           @  33.8min  dur= 306s
+[2026-03-13 13:02:11] [INFO] Starting background data logger...
+[2026-03-13 13:02:11] [INFO]   cmd: C:\Users\Dweep\miniconda3\envs\test\python.exe logging\data_logger.py --host 192.168.5.194 --port 1502 --interval 0.1 --output run_04\master_dataset.csv --metadata-file run_04\attack_metadata.json
+[2026-03-13 13:02:16] [INFO]   Logger started (PID 35428)
+[2026-03-13 13:02:16] [INFO] Progress: 0.0/70min (0.0%)
+[2026-03-13 13:03:17] [INFO] ▶ ATTACK START: Reconnaissance Scan (269s)
+[2026-03-13 13:03:20] [INFO]   Reconnaissance: Scanning 100 addresses
+[2026-03-13 13:07:49] [INFO]   Reconnaissance complete: 2690 register reads over 269s
+[2026-03-13 13:07:49] [INFO] ✓ ATTACK COMPLETE: Reconnaissance Scan
+[2026-03-13 13:11:49] [INFO] Progress: 5.0/70min (7.1%)
+[2026-03-13 13:14:02] [INFO] ▶ ATTACK START: Replay Attack (255s)
+[2026-03-13 13:14:05] [INFO]   Replay: Capturing 10s of normal traffic
+[2026-03-13 13:14:15] [INFO]   Captured 10 snapshots, starting replay...
+[2026-03-13 13:18:20] [INFO]   Replay complete
+[2026-03-13 13:18:20] [INFO] ✓ ATTACK COMPLETE: Replay Attack
+[2026-03-13 13:21:07] [INFO] Progress: 10.0/70min (14.3%)
+[2026-03-13 13:25:17] [INFO] ▶ ATTACK START: Valve Manipulation Attack (449s)
+[2026-03-13 13:25:20] [INFO]   Command: C:\Users\Dweep\miniconda3\envs\test\python.exe attacks/command_injection.py --host 192.168.5.194 --port 1502 --attack valve_manipulation --duration 449
+[2026-03-13 13:32:51] [INFO] ✓ ATTACK COMPLETE: Valve Manipulation Attack
+[2026-03-13 13:33:41] [INFO] Progress: 15.0/70min (21.4%)
+[2026-03-13 13:38:42] [INFO] Progress: 20.0/70min (28.6%)
+[2026-03-13 13:42:23] [INFO] ▶ ATTACK START: Slow Ramp Attack (521s)
+[2026-03-13 13:42:26] [INFO]   Command: C:\Users\Dweep\miniconda3\envs\test\python.exe attacks/command_injection.py --host 192.168.5.194 --port 1502 --attack slow_ramp --duration 521
+[2026-03-13 13:51:07] [INFO] ✓ ATTACK COMPLETE: Slow Ramp Attack
+[2026-03-13 13:52:27] [INFO] Progress: 25.0/70min (35.7%)
+[2026-03-13 13:57:27] [INFO] Progress: 30.0/70min (42.9%)
+[2026-03-13 14:01:12] [INFO] ▶ ATTACK START: Valve Manipulation Attack (306s)
+[2026-03-13 14:01:15] [INFO]   Command: C:\Users\Dweep\miniconda3\envs\test\python.exe attacks/command_injection.py --host 192.168.5.194 --port 1502 --attack valve_manipulation --duration 306
+[2026-03-13 14:06:22] [INFO] ✓ ATTACK COMPLETE: Valve Manipulation Attack
+[2026-03-13 14:07:38] [INFO] Progress: 35.0/70min (50.0%)
+[2026-03-13 14:12:38] [INFO] Progress: 40.0/70min (57.1%)
+[2026-03-13 14:17:38] [INFO] Progress: 45.0/70min (64.3%)
+[2026-03-13 14:22:38] [INFO] Progress: 50.0/70min (71.4%)
+[2026-03-13 14:27:38] [INFO] Progress: 55.0/70min (78.6%)
+[2026-03-13 14:32:38] [INFO] Progress: 60.0/70min (85.7%)
+[2026-03-13 14:37:38] [INFO] Progress: 65.0/70min (92.9%)
+[2026-03-13 14:42:38] [INFO] ✓ Generation complete
+[2026-03-13 14:42:38] [INFO] Cleanup...
+[2026-03-13 14:42:38] [INFO] Stopping logger...
+[2026-03-13 14:42:38] [INFO] ======================================================================
+[2026-03-13 14:42:38] [INFO] COMPLETE
+[2026-03-13 14:42:38] [INFO] ======================================================================
+[2026-03-13 14:42:38] [INFO] Output: run_04\master_dataset.csv
+[2026-03-13 14:42:38] [INFO] Rows: 30001

@@ -1,0 +1,60 @@
+[2026-03-13 17:42:58] [INFO] ======================================================================
+[2026-03-13 17:42:58] [INFO] SWAT DATASET GENERATOR - FIXED VERSION
+[2026-03-13 17:42:58] [INFO] ======================================================================
+[2026-03-13 17:42:58] [INFO] Configuration:
+[2026-03-13 17:42:58] [INFO]   Total: 70 min
+[2026-03-13 17:42:58] [INFO]   Attack: 30 min
+[2026-03-13 17:42:58] [INFO]   Each attack: 5-10 min
+[2026-03-13 17:42:58] [INFO]   Network attacks: 3× each (DOS, Replay, Recon)
+[2026-03-13 17:42:58] [INFO] Generating attack schedule...
+[2026-03-13 17:42:58] [INFO] Schedule generated:
+[2026-03-13 17:42:58] [INFO]   Total duration: 4200s (70min)
+[2026-03-13 17:42:58] [INFO]   Total attack time: 1730s (28.8min)
+[2026-03-13 17:42:58] [INFO]   Number of attacks: 5
+[2026-03-13 17:42:58] [INFO] [SCHEDULE] [ 1] Reconnaissance Scan                 @   1.0min  dur= 262s
+[2026-03-13 17:42:58] [INFO] [SCHEDULE] [ 2] Denial of Service                   @   7.4min  dur= 197s
+[2026-03-13 17:42:58] [INFO] [SCHEDULE] [ 3] Tank Overflow Attack                @  13.3min  dur= 584s
+[2026-03-13 17:42:58] [INFO] [SCHEDULE] [ 4] Chemical Depletion Attack           @  25.7min  dur= 318s
+[2026-03-13 17:42:58] [INFO] [SCHEDULE] [ 5] Tank Overflow Attack                @  33.8min  dur= 369s
+[2026-03-13 17:42:58] [INFO] Starting background data logger...
+[2026-03-13 17:42:58] [INFO]   cmd: C:\Users\Dweep\miniconda3\envs\test\python.exe logging\data_logger.py --host 192.168.5.194 --port 1502 --interval 0.1 --output run_01\master_dataset.csv --metadata-file run_01\attack_metadata.json
+[2026-03-13 17:43:03] [INFO]   Logger started (PID 31052)
+[2026-03-13 17:43:03] [INFO] Progress: 0.0/70min (0.0%)
+[2026-03-13 17:44:03] [INFO] ▶ ATTACK START: Reconnaissance Scan (262s)
+[2026-03-13 17:44:06] [INFO]   Reconnaissance: Scanning 100 addresses
+[2026-03-13 17:48:29] [INFO]   Reconnaissance complete: 2620 register reads over 262s
+[2026-03-13 17:48:29] [INFO] ✓ ATTACK COMPLETE: Reconnaissance Scan
+[2026-03-13 17:52:29] [INFO] Progress: 5.0/70min (7.1%)
+[2026-03-13 17:54:54] [INFO] ▶ ATTACK START: Denial of Service (197s)
+[2026-03-13 17:54:57] [INFO]   DOS: Flooding at 755 req/s
+[2026-03-13 17:58:14] [INFO]   DOS complete: 148735 requests sent
+[2026-03-13 17:58:14] [INFO] ✓ ATTACK COMPLETE: Denial of Service
+[2026-03-13 18:00:49] [INFO] Progress: 10.0/70min (14.3%)
+[2026-03-13 18:04:07] [INFO] ▶ ATTACK START: Tank Overflow Attack (584s)
+[2026-03-13 18:04:10] [INFO]   Command: C:\Users\Dweep\miniconda3\envs\test\python.exe attacks/command_injection.py --host 192.168.5.194 --port 1502 --attack tank_overflow --duration 584 --overflow-value 1004
+[2026-03-13 18:13:58] [INFO] ✓ ATTACK COMPLETE: Tank Overflow Attack
+[2026-03-13 18:15:40] [INFO] Progress: 15.0/70min (21.4%)
+[2026-03-13 18:20:40] [INFO] Progress: 20.0/70min (28.6%)
+[2026-03-13 18:25:40] [INFO] Progress: 25.0/70min (35.7%)
+[2026-03-13 18:26:20] [INFO] ▶ ATTACK START: Chemical Depletion Attack (318s)
+[2026-03-13 18:26:23] [INFO]   Command: C:\Users\Dweep\miniconda3\envs\test\python.exe attacks/command_injection.py --host 192.168.5.194 --port 1502 --attack chemical_depletion --duration 318
+[2026-03-13 18:31:43] [INFO] ✓ ATTACK COMPLETE: Chemical Depletion Attack
+[2026-03-13 18:36:03] [INFO] Progress: 30.0/70min (42.9%)
+[2026-03-13 18:39:48] [INFO] ▶ ATTACK START: Tank Overflow Attack (369s)
+[2026-03-13 18:39:51] [INFO]   Command: C:\Users\Dweep\miniconda3\envs\test\python.exe attacks/command_injection.py --host 192.168.5.194 --port 1502 --attack tank_overflow --duration 369 --overflow-value 1034
+[2026-03-13 18:46:04] [INFO] ✓ ATTACK COMPLETE: Tank Overflow Attack
+[2026-03-13 18:47:19] [INFO] Progress: 35.0/70min (50.0%)
+[2026-03-13 18:52:19] [INFO] Progress: 40.0/70min (57.1%)
+[2026-03-13 18:57:19] [INFO] Progress: 45.0/70min (64.3%)
+[2026-03-13 19:02:19] [INFO] Progress: 50.0/70min (71.4%)
+[2026-03-13 19:07:19] [INFO] Progress: 55.0/70min (78.6%)
+[2026-03-13 19:12:19] [INFO] Progress: 60.0/70min (85.7%)
+[2026-03-13 19:17:20] [INFO] Progress: 65.0/70min (92.9%)
+[2026-03-13 19:22:20] [INFO] ✓ Generation complete
+[2026-03-13 19:22:20] [INFO] Cleanup...
+[2026-03-13 19:22:20] [INFO] Stopping logger...
+[2026-03-13 19:22:20] [INFO] ======================================================================
+[2026-03-13 19:22:20] [INFO] COMPLETE
+[2026-03-13 19:22:20] [INFO] ======================================================================
+[2026-03-13 19:22:20] [INFO] Output: run_01\master_dataset.csv
+[2026-03-13 19:22:20] [INFO] Rows: 29701

@@ -1,0 +1,19 @@
+Dataset merging
+
+Each run will have different absolute timestamps — convert to elapsed_seconds from run start before merging, or use a unified session ID column
+Normal baseline distributions may drift slightly between runs (tank starting levels, chemical levels) — verify normal-state stats are consistent across runs before concatenating
+
+Attack coverage tracking — make sure your 4-attacks-per-run grouping covers:
+RunAttacksRun 1 (this one)Recon, DoS, Tank Overflow, Chemical DepletionRun 2pH Manipulation, Replay, Valve Manipulation, Slow RampRun 3Reconnaissance + network variants, Membrane Damage, remaining...fill to 13
+Key things to fix regardless of run:
+
+pH simulation (AIT_202 flat) — this will break Run 2 if it's still stuck at 7.2. Fix the CODESYS register mapping before that run
+Stage 3/5 inactive — P_301/P_501 never turn on. If Membrane Damage attack targets Stage 3, it needs UF actually running first
+Poll rate — still 0.2s; push to 0.1s so Recon (only 14s long) gets more than 70 rows
+
+After all runs are complete, when you're ready to merge, I can write a pipeline that:
+
+Concatenates all CSVs with a run_id column
+Validates cross-run label consistency
+Drops dead columns globally (not per-run)
+Outputs a clean, merged ML-ready dataset

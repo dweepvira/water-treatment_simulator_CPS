@@ -1,0 +1,7 @@
+ATTACK SCHEDULE
+======================================================================
+[ 1] Reconnaissance Scan                 @   1.0min  dur= 262s
+[ 2] Denial of Service                   @   7.4min  dur= 197s
+[ 3] Tank Overflow Attack                @  13.3min  dur= 584s
+[ 4] Chemical Depletion Attack           @  25.7min  dur= 318s
+[ 5] Tank Overflow Attack                @  33.8min  dur= 369s

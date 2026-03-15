@@ -1,0 +1,7 @@
+ATTACK SCHEDULE
+======================================================================
+[ 1] Reconnaissance Scan                 @   1.0min  dur= 278s
+[ 2] Replay Attack                       @   7.2min  dur= 295s
+[ 3] Slow Ramp Attack                    @  13.6min  dur= 319s
+[ 4] Slow Ramp Attack                    @  21.5min  dur= 421s
+[ 5] Valve Manipulation Attack           @  29.6min  dur= 478s

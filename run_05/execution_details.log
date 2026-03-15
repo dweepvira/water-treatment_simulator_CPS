@@ -1,0 +1,42 @@
+[2026-03-15 16:25:59] [INFO] ======================================================================
+[2026-03-15 16:25:59] [INFO] SWAT DATASET GENERATOR - FIXED VERSION
+[2026-03-15 16:25:59] [INFO] ======================================================================
+[2026-03-15 16:25:59] [INFO] Configuration:
+[2026-03-15 16:25:59] [INFO]   Total: 70 min
+[2026-03-15 16:25:59] [INFO]   Attack: 30 min
+[2026-03-15 16:25:59] [INFO]   Each attack: 5-10 min
+[2026-03-15 16:25:59] [INFO]   Network attacks: 3× each (DOS, Replay, Recon)
+[2026-03-15 16:25:59] [INFO] Generating attack schedule...
+[2026-03-15 16:25:59] [INFO] Schedule generated:
+[2026-03-15 16:25:59] [INFO]   Total duration: 4200s (70min)
+[2026-03-15 16:25:59] [INFO]   Total attack time: 1513s (25.2min)
+[2026-03-15 16:25:59] [INFO]   Number of attacks: 5
+[2026-03-15 16:25:59] [INFO] [SCHEDULE] [ 1] Reconnaissance Scan                 @   1.0min  dur= 232s
+[2026-03-15 16:25:59] [INFO] [SCHEDULE] [ 2] Denial of Service                   @   7.2min  dur= 193s
+[2026-03-15 16:25:59] [INFO] [SCHEDULE] [ 3] Replay Attack                       @  12.6min  dur= 234s
+[2026-03-15 16:25:59] [INFO] [SCHEDULE] [ 4] pH Manipulation Attack              @  18.9min  dur= 323s
+[2026-03-15 16:25:59] [INFO] [SCHEDULE] [ 5] pH Manipulation Attack              @  25.9min  dur= 531s
+[2026-03-15 16:25:59] [INFO] Starting background data logger...
+[2026-03-15 16:25:59] [INFO]   cmd: C:\Users\Dweep\miniconda3\envs\test\python.exe logging\data_logger.py --host 192.168.5.194 --port 1502 --interval 0.1 --output run_05\master_dataset.csv --metadata-file run_05\attack_metadata.json
+[2026-03-15 16:26:04] [INFO]   Logger started (PID 53472)
+[2026-03-15 16:26:04] [INFO] Progress: 0.0/70min (0.0%)
+[2026-03-15 16:27:04] [INFO] ▶ ATTACK START: Reconnaissance Scan (232s)
+[2026-03-15 16:27:07] [INFO]   Reconnaissance: Scanning 100 addresses
+[2026-03-15 16:30:59] [INFO]   Reconnaissance complete: 2320 register reads over 232s
+[2026-03-15 16:30:59] [INFO] ✓ ATTACK COMPLETE: Reconnaissance Scan
+[2026-03-15 16:35:00] [INFO] Progress: 5.0/70min (7.1%)
+[2026-03-15 16:37:11] [INFO] ▶ ATTACK START: Denial of Service (193s)
+[2026-03-15 16:37:14] [INFO]   DOS: Flooding at 999 req/s
+[2026-03-15 16:40:27] [INFO]   DOS complete: 192807 requests sent
+[2026-03-15 16:40:27] [INFO] ✓ ATTACK COMPLETE: Denial of Service
+[2026-03-15 16:43:16] [INFO] Progress: 10.0/70min (14.3%)
+[2026-03-15 16:45:52] [INFO] ▶ ATTACK START: Replay Attack (234s)
+[2026-03-15 16:45:55] [INFO]   Replay: Capturing 10s of normal traffic
+[2026-03-15 16:46:05] [INFO]   Captured 10 snapshots, starting replay...
+[2026-03-15 16:49:49] [INFO]   Replay complete
+[2026-03-15 16:49:49] [INFO] ✓ ATTACK COMPLETE: Replay Attack
+[2026-03-15 16:52:13] [INFO] Progress: 15.0/70min (21.4%)
+[2026-03-15 16:56:08] [INFO] ▶ ATTACK START: pH Manipulation Attack (323s)
+[2026-03-15 16:56:11] [INFO]   Command: C:\Users\Dweep\miniconda3\envs\test\python.exe attacks/command_injection.py --host 192.168.5.194 --port 1502 --attack ph_manipulation --duration 323 --target-ph 8.02556985945206
+[2026-03-15 17:01:36] [INFO] ✓ ATTACK COMPLETE: pH Manipulation Attack
+[2026-03-15 17:02:41] [INFO] Progress: 20.0/70min (28.6%)
