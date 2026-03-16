@@ -1,1 +1,424 @@
-"# water-treatment_simulator_CPS" 
+# Water Treatment CPS Cyber-Physical Simulator & Attack Testbed
+
+A Cyber-Physical System (CPS) simulation of an Industrial Control System (ICS) based **water treatment plant**, designed to generate realistic operational datasets and simulate cyber-attacks on PLC-controlled infrastructure.
+
+This project integrates:
+
+- PLC process simulation using **CODESYS Structured Text**
+- **Modbus TCP communication**
+- **Automated dataset generation**
+- **Cyber-attack simulation**
+- **Machine learning based intrusion detection**
+- **Real-time anomaly detection**
+
+The platform allows researchers and students to generate labeled ICS datasets and evaluate machine learning approaches for detecting attacks in cyber-physical water systems.
+
+---
+
+# Repository
+
+GitHub Repository
+
+https://github.com/dweepvira/water-treatment_simulator_CPS
+
+---
+
+# System Architecture
+
+```
+                +-----------------------+
+                |     PLC Controller    |
+                |   (CODESYS ST Code)   |
+                +-----------+-----------+
+                            |
+                        Modbus TCP
+                            |
+                +-----------v-----------+
+                |    Python Data Logger |
+                | Dataset Generator     |
+                +-----------+-----------+
+                            |
+                +-----------v-----------+
+                |   Attack Simulation   |
+                |   Python Scripts      |
+                +-----------+-----------+
+                            |
+                     Generated Dataset
+                            |
+                +-----------v-----------+
+                | Feature Engineering   |
+                +-----------+-----------+
+                            |
+                +-----------v-----------+
+                | ML Training Pipeline  |
+                +-----------+-----------+
+                            |
+                +-----------v-----------+
+                | Real-Time Intrusion   |
+                | Detection System      |
+                +-----------------------+
+```
+
+---
+
+# Water Treatment Process Simulation
+
+The system simulates a simplified industrial water treatment plant.
+
+## Stage 1 — Raw Water Intake
+- Raw water tank
+- Pump operation
+- Level monitoring
+
+## Stage 2 — Chemical Treatment
+- pH monitoring
+- Chemical dosing control
+
+## Stage 3 — Filtration
+- Flow rate control
+- Filtration process
+
+## Stage 4 — Storage & Distribution
+- Final water storage tank
+- Overflow detection
+- Output flow control
+
+### Sensors monitored
+
+```
+Tank Level
+Flow Rate
+pH Value
+Pump Status
+Valve State
+Chemical Dosing
+Overflow Events
+```
+
+---
+
+# Project Structure
+
+```
+water-treatment_simulator_CPS
+│
+├── ST_code/
+│     plant.st
+│
+├── attacks/
+│     attack_base.py
+│     command_injection.py
+│     dos_replay.py
+│     reconnaissance.py
+│
+├── config/
+│     swat_config.py
+│
+├── logging/
+│     data_logger.py
+│
+├── utils/
+│     modbus_utils.py
+│
+├── docs/
+│
+├── plots/
+│
+├── run_01/
+├── run_02/
+├── run_03/
+├── run_04/
+├── run_05/
+│
+├── automated_dataset_generator.py
+├── feature_engineering.py
+├── ml_training.py
+├── real_time_detect.py
+├── merge_runs.py
+├── dataset_analysis.py
+│
+├── swat_ml_pipeline.ipynb
+├── requirements.txt
+└── README.md
+```
+
+---
+
+# Installation
+
+Clone the repository
+
+```bash
+git clone https://github.com/dweepvira/water-treatment_simulator_CPS.git
+cd water-treatment_simulator_CPS
+```
+
+Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+# Running the Simulator
+
+## Step 1 — Start PLC Simulation
+
+Load the Structured Text program in **CODESYS**
+
+```
+ST_code/plant.st
+```
+
+Run the PLC runtime and ensure the **Modbus TCP server is active**.
+
+---
+
+## Step 2 — Run Dataset Generator
+
+Start the automated dataset generator.
+
+```bash
+python automated_dataset_generator.py --host <PLC_IP>
+```
+
+Example
+
+```bash
+python automated_dataset_generator.py --host 192.168.0.163
+```
+
+This script logs:
+
+- process variables
+- attack labels
+- system states
+- timestamps
+
+---
+
+# Attack Simulation
+
+The system includes multiple cyber-attack scenarios that target PLC operations.
+
+---
+
+# Command Injection Attack
+
+Manipulates PLC control commands such as pumps or valves.
+
+```bash
+python attacks/command_injection.py --host <PLC_IP>
+```
+
+Example
+
+```bash
+python attacks/command_injection.py --host 192.168.0.163
+```
+
+Effects:
+
+- Forces pumps ON/OFF
+- Opens or closes valves
+- Alters system behavior
+
+---
+
+# Denial of Service (DoS)
+
+Floods PLC communication using Modbus requests.
+
+```bash
+python attacks/dos_replay.py --host <PLC_IP>
+```
+
+Effects:
+
+- Communication delays
+- Control loop disruption
+- System instability
+
+---
+
+# Reconnaissance Attack
+
+Scans Modbus registers to discover PLC variables.
+
+```bash
+python attacks/reconnaissance.py --host <PLC_IP>
+```
+
+Effects:
+
+- Maps PLC memory
+- Identifies sensors and actuators
+- Enables targeted attacks
+
+---
+
+# Dataset Generation
+
+Each execution generates a run folder.
+
+Example:
+
+```
+run_01
+run_02
+run_03
+run_04
+run_05
+```
+
+Each run contains:
+
+```
+master_dataset.csv
+attack_metadata.json
+attack_timeline.log
+execution_details.log
+```
+
+These datasets combine:
+
+- normal process behaviour
+- attack periods
+- sensor values
+- control signals
+
+---
+
+# Feature Engineering
+
+Generate ML features.
+
+```bash
+python feature_engineering.py
+```
+
+Extracted features include
+
+```
+sensor deltas
+temporal gradients
+rolling averages
+rate of change
+statistical features
+```
+
+Outputs:
+
+```
+features.csv
+labels.csv
+X_scaled.npy
+```
+
+---
+
+# Machine Learning Training
+
+Train anomaly detection models.
+
+```bash
+python ml_training.py
+```
+
+Supported models
+
+```
+LightGBM
+Random Forest
+Gradient Boosting
+```
+
+Outputs
+
+```
+trained_models/
+feature_importance.png
+confusion_matrix.png
+model_metadata.json
+```
+
+---
+
+# Real-Time Intrusion Detection
+
+Run the detection system.
+
+```bash
+python real_time_detect.py
+```
+
+Pipeline
+
+```
+Live PLC Data
+      ↓
+Feature Extraction
+      ↓
+Trained Model
+      ↓
+Attack Prediction
+```
+
+---
+
+# Dataset Analysis
+
+Analyze dataset statistics.
+
+```bash
+python dataset_analysis.py
+```
+
+Generated plots include
+
+```
+class_distribution.png
+temporal_features_overflow.png
+temporal_features_pH.png
+feature_importance_corr.png
+```
+
+---
+
+# Research Applications
+
+This platform can be used for
+
+- Industrial Control System security research
+- Cyber-Physical System attack simulation
+- Intrusion detection dataset generation
+- Machine learning research for ICS
+- Cybersecurity education
+
+---
+
+# License
+
+MIT License
+
+---
+
+# Author
+
+Dweep Vira  
+M.Tech Artificial Intelligence & Data Science  
+Veermata Jijabai Technological Institute (VJTI)  
+Mumbai, India
+
+---
+
+# Future Improvements
+
+- Digital twin simulation
+- Reinforcement learning control
+- Advanced cyber-attack scenarios
+- SCADA integration
+- Federated intrusion detection systems
+
+---
