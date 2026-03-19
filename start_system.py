@@ -434,12 +434,13 @@ Available attacks (pass comma-separated to --include-attacks):
     if not args.no_logger:
         print('\n[4/5] Starting data logger ...')
         run_dir.mkdir(parents=True, exist_ok=True)
-        cmd = [sys.executable, 'logging/data_logger.py',
-               '--host',          args.host,
-               '--port',          str(args.port),
-               '--interval',      '0.1',
-               '--output',        str(output_csv),
-               '--metadata-file', str(meta_json)]
+        cmd = [sys.executable, 'matlab_bridge/physics_client.py',
+                '--plc-host',      args.host,
+                '--plc-port',      str(args.port),
+                '--matlab-host',   effective_matlab_host,
+                '--matlab-port',   str(args.matlab_port),
+                '--output',        str(output_csv),          # ← add
+                '--metadata-file', str(meta_json)]           # ← add
         procs.append(subprocess.Popen(cmd))
         time.sleep(3)
         print(f'  Data logger started  →  {output_csv}')

