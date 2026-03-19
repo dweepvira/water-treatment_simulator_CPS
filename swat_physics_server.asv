@@ -1,0 +1,441 @@
+%% swat_physics_server.m
+% UDP server — receives actuator JSON, returns sensor JSON every timestep.
+%
+% Run from MATLAB command window:
+%   swat_physics_server()
+%
+% Protocol:
+%   Client → Server : JSON string of actuator coil states
+%   Server → Client : JSON string of computed sensor register values
+%
+% Bind port : 9501 (configurable via PHYSICS_UDP_PORT env var)
+
+function swat_physics_server()
+    portEnv = getenv('PHYSICS_UDP_PORT');
+    PORT = 9501;
+    if ~isempty(portEnv)
+        p = str2double(portEnv);
+        if ~isnan(p); PORT = p; end
+    end
+    REPLY_PORT = 9502;   % fixed port Python listens on for replies
+    DT = 0.1;
+
+    fprintf('[SWaT Physics Server] Starting on UDP port %d ...\n', PORT);
+    u = udpport('datagram', 'LocalPort', PORT, 'EnablePortSharing', false);
+    fprintf('[SWaT Physics Server] Ready. Waiting for actuator packets.\n');
+
+    s = init_state();
+    cleanup = onCleanup(@() delete(u));
+
+    while true
+        % Wait for data
+        while u.NumBytesAvailable == 0
+            pause(0.005);
+        end
+
+        try
+            raw = read(u, u.NumBytesAvailable, 'uint8');
+            txt = char(raw);
+            fprintf('Received %d bytes\n', numel(raw));
+
+            act  = jsondecode(txt);
+            [s, regs] = step_physics(s, act, DT);
+            outTxt = jsonencode(regs);
+            write(u, uint8(outTxt), '127.0.0.1', REPLY_PORT);
+        catch ME
+            fprintf('Error: %s\n', ME.message);
+            write(u, uint8('{}'), '127.0.0.1', REPLY_PORT);
+        end
+    end
+end
+
+%% ─────────────────────────────────────────────────────────────────────────
+%%  Physics initialisation
+%% ─────────────────────────────────────────────────────────────────────────
+function s = init_state()
+    %% Stage 1
+    s.LIT_101  = 500;   % tank level (L)
+    s.FIT_101  = 0;     % inlet flow  (L/s, internal)
+    s.FIT_201  = 0;     % outlet flow (L/s, internal)
+
+    %% Stage 2 — chemistry
+    s.pH       = 7.20;  % true pH (not ×100)
+    s.AIT_201  = 450;   % turbidity NTU
+    s.AIT_203  = 410;   % ORP NaOCl  mV
+    s.Chlorine_Residual = 3.0;   % mg/L (×10 in register)
+    s.Acid_Tank_Level   = 75;    % %
+    s.Chlorine_Tank_Level = 80;  % %
+    s.Coagulant_Tank_Level = 80; % %
+    s.Bisulfate_Tank_Level = 85; % %
+
+    %% Stage 3 — UF
+    s.LIT_301      = 800;
+    s.FIT_301      = 0;
+    s.DPIT_301     = 5;      % kPa (raw, ×10 in register)
+    s.UF_Fouling   = 0;      % 0-1 fraction
+    s.UF_Runtime   = 0;      % scan cycles
+    s.UF_LastBW    = 0;
+    s.Turbidity_UF = 0;
+
+    %% Stage 4 — dechlorination / UV
+    s.LIT_401  = 500;
+    s.FIT_401  = 0;
+    s.AIT_402  = 200;   % ORP post-dechlorination mV
+
+    %% Stage 5 — RO
+    s.PIT_501  = 0;     % bar ×10
+    s.PIT_502  = 5;
+    s.PIT_503  = 90;
+    s.FIT_501  = 0;
+    s.FIT_502  = 0;
+    s.FIT_503  = 0;
+    s.FIT_504  = 0;
+    s.RO_Fouling   = 0;
+    s.RO_Runtime   = 0;
+    s.RO_LastClean = 0;
+    s.TDS_Feed     = 5000;
+    s.TDS_Permeate = 50;
+
+    %% Stage 6
+    s.FIT_601  = 0;
+
+    %% Global
+    s.Water_Temp    = 25.0;   % °C
+    s.Ambient_Temp  = 25.0;
+    s.Turbidity_Raw = 150;    % NTU (×10 in register)
+    s.Energy_P101   = 0;
+    s.Energy_P301   = 0;
+    s.Energy_P501   = 0;
+    s.noise_seed    = 7;
+end
+
+
+%% ─────────────────────────────────────────────────────────────────────────
+%%  Single physics timestep
+%% ─────────────────────────────────────────────────────────────────────────
+function [s, r] = step_physics(s, act, dt)
+    % act : struct of actuator booleans / integers from CODESYS
+    % s   : running state
+    % r   : register map to write back to CODESYS (integers)
+
+    %% Noise (same LCG as CODESYS for reproducibility)
+    s.noise_seed = mod(s.noise_seed * 37 + 13, 23);
+    ns = s.noise_seed;
+
+    %% ── Stage 1: raw water intake ────────────────────────────────────────
+    MV_101 = get_field(act, 'MV_101', 0);
+    P_101  = get_field(act, 'P_101',  false);
+    P_102  = get_field(act, 'P_102',  false);
+
+    % Inlet flow (m³/h → L/s)
+    if MV_101 > 0
+        Q_in = (5 + mod(ns, 2)) / 3600 * 1000;     % ≈ 1.39 L/s
+    else
+        Q_in = 1 / 3600 * 1000;                     % trickle
+    end
+
+    % Outlet flow (dependent on pump states)
+    if P_101 || P_102
+        base = 4 + double(s.LIT_101 > 400) + double(s.LIT_101 > 600);
+        if P_102; base = base + 2; end
+        Q_out = base / 3600 * 1000;
+    else
+        Q_out = 1 / 3600 * 1000;
+    end
+
+    % Mass balance ODE  dV/dt = Q_in - Q_out  (Euler)
+    s.LIT_101 = s.LIT_101 + (Q_in - Q_out) * dt;
+    s.LIT_101 = clamp(s.LIT_101, 0, 1000);
+    s.FIT_101 = Q_in * 3600 / 1000;    % back to m³/h for register
+    s.FIT_201 = Q_out * 3600 / 1000;
+
+    % Energy accumulator
+    if P_101 || P_102
+        s.Energy_P101 = min(s.Energy_P101 + s.FIT_201 * dt, 30000);
+    end
+
+    %% ── Stage 2: chemical dosing ─────────────────────────────────────────
+    P_203 = get_field(act, 'P_203', false);   % acid
+    P_205 = get_field(act, 'P_205', false);   % chlorine
+    P_206 = get_field(act, 'P_206', false);   % coagulant
+    P_403 = get_field(act, 'P_403', false);   % bisulfate (Stage 4)
+
+    % pH — first-order buffer kinetics (τ_pH = 40 s)
+    % Equilibrium drifts toward raw-water pH (≈ 8.5) when acid pump is off
+    if P_203
+        pH_target = 6.80;   % acid driving pH down
+        s.Acid_Tank_Level = max(0, s.Acid_Tank_Level - 0.5 * dt);
+    else
+        pH_target = 8.50;   % natural alkaline drift
+    end
+    tau_pH = 40;
+    s.pH = pH_target + (s.pH - pH_target) * exp(-dt / tau_pH);
+    % Add realistic micro-noise (±0.02 pH)
+    s.pH = s.pH + (mod(ns, 3) - 1) * 0.01;
+    s.pH = clamp(s.pH, 5.5, 9.0);
+
+    % Turbidity (NTU)
+    if P_206
+        s.AIT_201 = max(100, s.AIT_201 - 2 * dt);
+        s.Coagulant_Tank_Level = max(0, s.Coagulant_Tank_Level - (1 + mod(ns,2)) * dt);
+    else
+        s.AIT_201 = min(1000, s.AIT_201 + 1 * dt);
+    end
+
+    % Chlorine residual (mg/L)
+    if P_205
+        s.Chlorine_Residual = min(8.0, s.Chlorine_Residual + 0.3 * dt);
+        s.Chlorine_Tank_Level = max(0, s.Chlorine_Tank_Level - dt);
+    else
+        s.Chlorine_Residual = max(1.5, s.Chlorine_Residual - 0.1 * dt);
+    end
+
+    % ORP NaOCl (400–620 mV)
+    s.AIT_203 = 400 + ns * 10;
+
+    % Bisulfate consumption
+    if P_403
+        s.Bisulfate_Tank_Level = max(0, s.Bisulfate_Tank_Level - (1 + mod(ns,2)) * dt);
+    end
+
+    % Auto-refill hysteresis (mimics original SR-latch in ST)
+    s.Acid_Tank_Level   = tank_refill(s.Acid_Tank_Level,   15, 80,  2*dt);
+    s.Chlorine_Tank_Level = tank_refill(s.Chlorine_Tank_Level, 15, 85, 2*dt);
+    s.Coagulant_Tank_Level = tank_refill(s.Coagulant_Tank_Level, 15, 75, 2*dt);
+    s.Bisulfate_Tank_Level = tank_refill(s.Bisulfate_Tank_Level, 15, 70, 2*dt);
+
+    %% ── Stage 3: ultrafiltration ─────────────────────────────────────────
+    P_301 = get_field(act, 'P_301', false);
+    UF_BW = get_field(act, 'UF_Backwash_Active', false);
+
+    if P_301 && ~UF_BW
+        s.UF_Runtime  = min(30000, s.UF_Runtime  + 1);
+        s.UF_LastBW   = min(30000, s.UF_LastBW   + 1);
+
+        % Fouling accumulates as a function of turbidity and runtime
+        fouling_rate = 0.001 * (1 + s.AIT_201 / 1000);
+        s.UF_Fouling  = min(1.0, s.UF_Fouling + fouling_rate * dt);
+
+        % TMP — Darcy's law: TMP = J * μ * R_m
+        %   Simplified: DPIT increases proportionally to fouling factor
+        s.DPIT_301 = 25 + s.UF_Fouling * 100;  % kPa (raw)
+
+        % Flow (m³/h) — degrades with fouling
+        if s.LIT_301 > 700
+            Q_uf = 5 - s.UF_Fouling * 3;
+        elseif s.LIT_301 > 500
+            Q_uf = 4 - s.UF_Fouling * 2;
+        else
+            Q_uf = 3 - s.UF_Fouling * 2;
+        end
+        s.FIT_301 = max(2, Q_uf);
+
+        % UF permeate turbidity
+        s.Turbidity_UF = s.Turbidity_Raw / 20 + mod(ns, 2);
+    elseif UF_BW
+        % Backwash: reset fouling, clear TMP
+        s.UF_LastBW  = 0;
+        s.UF_Fouling = max(0, s.UF_Fouling - 0.1 * dt);
+        s.DPIT_301   = 10;
+        s.FIT_301    = 2;
+        if s.Turbidity_UF > 2
+            s.Turbidity_UF = s.Turbidity_UF - dt;
+        end
+    else
+        s.FIT_301  = 2;
+        s.DPIT_301 = 10;
+    end
+
+    % Stage 3 mass balance
+    Q_in_uf  = s.FIT_201 / 3600 * 1000;   % L/s from Stage 2
+    Q_out_uf = s.FIT_301 / 3600 * 1000;
+    s.LIT_301 = clamp(s.LIT_301 + (Q_in_uf - Q_out_uf) * dt, 0, 1000);
+
+    if P_301
+        s.Energy_P301 = min(30000, s.Energy_P301 + s.FIT_301 * dt);
+    end
+
+    %% ── Stage 4: dechlorination / UV ────────────────────────────────────
+    P_401 = get_field(act, 'P_401', false);
+
+    if P_401
+        if s.LIT_401 > 700;      Q_dc = 6;
+        elseif s.LIT_401 > 500;  Q_dc = 5;
+        elseif s.LIT_401 > 300;  Q_dc = 4;
+        else;                     Q_dc = 3;
+        end
+    else
+        Q_dc = 1;
+    end
+    s.FIT_401 = Q_dc;
+
+    Q_in_dc  = s.FIT_301 / 3600 * 1000;
+    Q_out_dc = s.FIT_401 / 3600 * 1000;
+    s.LIT_401 = clamp(s.LIT_401 + (Q_in_dc - Q_out_dc) * dt, 0, 1000);
+
+    % ORP post-dechlorination (200–370 mV)
+    s.AIT_402 = 200 + ns * 8;
+
+    % AIT_401 = effective chlorine post-UV (uses residual + noise)
+    s.AIT_401_val = s.Chlorine_Residual * 10 + mod(ns, 3);  % stored ×10
+
+    %% ── Stage 5: reverse osmosis ─────────────────────────────────────────
+    P_501 = get_field(act, 'P_501', false);
+
+    if P_501 && P_401 && s.LIT_401 > 200
+        s.RO_Runtime   = min(30000, s.RO_Runtime   + 1);
+        s.RO_LastClean = min(30000, s.RO_LastClean + 1);
+
+        % Fouling increases TMP exponentially
+        s.RO_Fouling = min(1.0, s.RO_Fouling + 0.0005 * dt);
+
+        % Feed pressure (bar ×10)
+        base_p = 120 + s.RO_Fouling * 80;
+        if s.LIT_401 > 600;     base_p = base_p + 5;
+        elseif s.LIT_401 < 400; base_p = base_p - 5;
+        end
+        s.PIT_501 = base_p;
+
+        % Flows
+        s.FIT_501 = 8 + mod(ns, 2);
+        s.FIT_502 = max(2, 4 - s.RO_Fouling * 2);   % permeate
+        s.FIT_503 = 2;
+        s.FIT_504 = 2;
+        s.FIT_501 = s.FIT_502 + s.FIT_503 + s.FIT_504;  % flow conservation
+
+        s.PIT_502 = 5 + mod(ns, 2);
+        s.PIT_503 = s.PIT_501 - 10;
+
+        % TDS
+        s.TDS_Feed     = 6000 + ns * 100;
+        s.TDS_Permeate = round(s.TDS_Feed * 15 / 1000);
+
+        s.Energy_P501  = min(30000, s.Energy_P501 + s.FIT_501 * dt);
+    else
+        s.PIT_501 = 90;
+        s.PIT_502 = 5;
+        s.PIT_503 = 80;
+        s.FIT_501 = 1; s.FIT_502 = 1; s.FIT_503 = 1; s.FIT_504 = 1;
+    end
+
+    % RO CIP reset
+    if get_field(act, 'RO_Cleaning_Active', false)
+        s.RO_LastClean = 0;
+        s.RO_Fouling   = max(0, s.RO_Fouling - 0.02 * dt);
+    end
+
+    %% ── Stage 6 ──────────────────────────────────────────────────────────
+    P_603 = get_field(act, 'P_603', false);
+    if P_603
+        s.FIT_601 = s.FIT_502 + mod(ns, 2);
+    else
+        s.FIT_601 = 1;
+    end
+
+    %% ── Global ───────────────────────────────────────────────────────────
+    % Raw turbidity
+    if get_field(act, 'MV_101', 0) > 0
+        s.Turbidity_Raw = 1500 + ns * 30;
+    else
+        s.Turbidity_Raw = 800 + ns * 10;
+    end
+
+    % Water temperature (Newton's law of cooling)
+    s.Water_Temp = s.Water_Temp + sign(s.Ambient_Temp - s.Water_Temp) * 0.1 * dt;
+
+    %% ── Build register map (integer values for Modbus) ───────────────────
+    r = struct();
+
+    % Stage 1
+    r.FIT_101 = round(s.FIT_101 * 10);     % m³/h ×10
+    r.LIT_101 = round(s.LIT_101);
+    r.MV_101  = get_field(act, 'MV_101', 0);
+    r.FIT_201 = round(s.FIT_201 * 10);
+
+    % Stage 2
+    r.AIT_201 = round(s.AIT_201);
+    r.AIT_202 = round(s.pH * 100);          % pH ×100
+    r.AIT_203 = round(s.AIT_203);
+    r.Acid_Tank_Level      = round(s.Acid_Tank_Level);
+    r.Chlorine_Tank_Level  = round(s.Chlorine_Tank_Level);
+    r.Coagulant_Tank_Level = round(s.Coagulant_Tank_Level);
+    r.Bisulfate_Tank_Level = round(s.Bisulfate_Tank_Level);
+    r.Chlorine_Residual    = round(s.Chlorine_Residual * 10);  % mg/L ×10
+
+    % Stage 3
+    r.DPIT_301      = round(s.DPIT_301 * 10);  % kPa ×10
+    r.FIT_301       = round(s.FIT_301 * 10);
+    r.LIT_301       = round(s.LIT_301);
+    r.UF_Fouling_Factor = round(s.UF_Fouling * 100);
+    r.UF_Runtime    = s.UF_Runtime;
+    r.UF_Last_Backwash = s.UF_LastBW;
+    r.Turbidity_UF  = round(s.Turbidity_UF * 10);
+
+    % Stage 4
+    r.AIT_401 = round(s.AIT_401_val);
+    r.AIT_402 = round(s.AIT_402);
+    r.FIT_401 = round(s.FIT_401 * 10);
+    r.LIT_401 = round(s.LIT_401);
+
+    % Stage 5
+    r.AIT_501 = round(s.TDS_Permeate);
+    r.AIT_502 = 650 + ns * 10;
+    r.AIT_503 = 75 + mod(ns, 10);
+    r.AIT_504 = 12 + mod(ns, 3);
+    r.FIT_501 = round(s.FIT_501 * 10);
+    r.FIT_502 = round(s.FIT_502 * 10);
+    r.FIT_503 = round(s.FIT_503 * 10);
+    r.FIT_504 = round(s.FIT_504 * 10);
+    r.PIT_501 = round(s.PIT_501 * 10);
+    r.PIT_502 = round(s.PIT_502 * 10);
+    r.PIT_503 = round(s.PIT_503 * 10);
+    r.RO_Runtime       = s.RO_Runtime;
+    r.RO_Fouling_Factor = round(s.RO_Fouling * 100);
+    r.RO_Last_Cleaning = s.RO_LastClean;
+    r.TDS_Feed     = s.TDS_Feed;
+    r.TDS_Permeate = s.TDS_Permeate;
+
+    % Stage 6 + global
+    r.FIT_601          = round(s.FIT_601 * 10);
+    r.Water_Temperature   = round(s.Water_Temp * 10);
+    r.Ambient_Temperature = round(s.Ambient_Temp * 10);
+    r.Turbidity_Raw    = round(s.Turbidity_Raw);
+    r.Energy_P101 = round(s.Energy_P101);
+    r.Energy_P301 = round(s.Energy_P301);
+    r.Energy_P501 = round(s.Energy_P501);
+    r.Energy_Total = round(s.Energy_P101 + s.Energy_P301 + s.Energy_P501);
+end
+
+
+%% ─────────────────────────────────────────────────────────────────────────
+%%  Helpers
+%% ─────────────────────────────────────────────────────────────────────────
+function v = clamp(v, lo, hi)
+    v = max(lo, min(hi, v));
+end
+
+function v = get_field(s, name, default)
+    if isfield(s, name)
+        v = double(s.(name));
+    else
+        v = default;
+    end
+end
+
+function level = tank_refill(level, lo, hi, increment)
+    % SR-latch hysteresis: refill from lo to hi
+    persistent refill_active;
+    if isempty(refill_active); refill_active = containers.Map; end
+    key = sprintf('%d_%d', round(lo*10), round(hi*10));
+    if ~isKey(refill_active, key); refill_active(key) = false; end
+
+    if level <= lo
+        refill_active(key) = true;
+    elseif level >= hi
+        refill_active(key) = false;
+    end
+
+    if refill_active(key) && level < hi
+        level = min(hi, level + increment);
+    end
+end
