@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -282,7 +284,7 @@ canvas.sp{width:100%;height:36px;display:block}
     <rect x="406" y="77" width="48" height="9" rx="2" class="mem" data-tip="UF Membrane (semi-permeable)"/>
     <text style="font-size:7px;fill:#0e7490;text-anchor:middle;font-family:'Segoe UI',sans-serif;font-weight:600" x="430" y="84">UF Membrane</text>
     <text class="val" id="tv-l3" x="430" y="132">800 L</text>
-    <text class="lbl" x="430" y="200">T-301 UF Filter</text>
+    <text class="lbl" x="430" y="200">T-301 (UF)</text>
     <!-- DPIT-301 pressure sensor -->
     <polygon class="s-ok" id="d-dpit" points="462,104 467,111 462,118 457,111" data-tip="DPIT-301 Trans-Membrane Pressure (kPa × 10 in register)"/>
     <text id="tv-dpit" style="font-size:8px;fill:#0e7490;text-anchor:start;font-family:'Segoe UI',sans-serif;font-weight:700" x="470" y="113">25 kPa</text>
@@ -329,7 +331,7 @@ canvas.sp{width:100%;height:36px;display:block}
     <circle cx="574" cy="64" r="12" fill="#f5f3ff" stroke="#a855f7" stroke-width="1.5" id="uv401" data-tip="UV-401  UV Disinfection Unit"/>
     <text style="font-size:8px;fill:#7c3aed;text-anchor:middle;font-family:'Segoe UI',sans-serif;font-weight:700" x="574" y="68">UV</text>
     <!-- P-403 Bisulfate dosing (below pipe, Stage 4 — reduces Cl before RO) -->
-    <g id="grp-p403" data-tip="P-403  Bisulfate Dosing Pump — reduces chlorine residual before RO membrane (Cl₂ destroys polyamide). Active when Chlorine_Residual > 30" style="cursor:help">
+    <g id="grp-p403" data-tip="P-403  Bisulfate Dosing Pump — reduces chlorine residual before RO membrane (Cl₂ destroys polyamide). Active when Chlorine_Residual > 20" style="cursor:help">
       <circle id="pb-p403" cx="545" cy="115" r="9" class="pump-body-on"/>
       <polygon id="pa-p403" points="541,111 541,119 550,115" class="pump-arrow-on"/>
       <text class="lbl" x="545" y="130">P-403</text>
@@ -346,7 +348,7 @@ canvas.sp{width:100%;height:36px;display:block}
     <rect id="w4" x="581" y="115" width="58" height="74" clip-path="url(#c4)" fill="#99f6e4" class="tank-water-teal"/>
     <rect x="580" y="70" width="60" height="120" rx="4" class="tank-shell" stroke="#14b8a6"/>
     <text class="val" id="tv-l4" x="610" y="132">500 L</text>
-    <text class="lbl" x="610" y="200">T-401 UV/Dechlor</text>
+    <text class="lbl" x="610" y="200">T-401 (DC)</text>
     <!-- AIT-402 ORP -->
     <circle class="sensor s-ok" id="d-orp" cx="577" cy="115" r="4" data-tip="AIT-402  ORP post-dechlorination (mV)"/>
     <text id="tv-orp" style="font-size:8px;fill:#15803d;text-anchor:end;font-family:'Segoe UI',sans-serif;font-weight:700" x="574" y="118">200mV</text>
@@ -380,7 +382,6 @@ canvas.sp{width:100%;height:36px;display:block}
     <path id="p-perm" class="pipe flow" d="M733 112 L723 112 L723 172 L845 172 L845 198" stroke="#16a34a" stroke-width="2" marker-end="url(#arr-g)"/>
     <text style="font-size:8px;fill:#16a34a;text-anchor:middle;font-family:'Segoe UI',sans-serif;font-weight:600" x="785" y="169">Permeate →</text>
     <!-- Brine/concentrate path (red, idle) -->
-    <!-- Brine/concentrate outlet — goes right to drain -->
     <path class="pipe idle" d="M837 133 L875 133" stroke="#ef4444" stroke-width="2"/>
     <!-- Drain symbol (three horizontal lines getting shorter) -->
     <line x1="875" y1="128" x2="875" y2="138" stroke="#ef4444" stroke-width="2"/>
@@ -397,7 +398,7 @@ canvas.sp{width:100%;height:36px;display:block}
     <rect x="735" y="192" width="98" height="7" rx="3" fill="#f1f5f9" stroke="#e2e8f0" stroke-width=".5"/>
     <rect id="ro-bar" x="735" y="192" width="0" height="7" rx="3" fill="#1d4ed8"/>
     <text class="lbl" x="784" y="209">RO Fouling</text>
-    <!-- High pressure alarm (ST: PIT_501 > 1800 OR PIT_502 > 300) -->
+    <!-- High pressure alarm (ST: PIT_501 > 1800 OR PIT_502 > 30) -->
     <g id="alm-hp" opacity="0">
       <rect x="733" y="214" width="104" height="13" rx="3" fill="#fef2f2" stroke="#fca5a5" stroke-width="1"/>
       <text class="alm-banner" style="font-size:8px;fill:#dc2626;text-anchor:middle;font-family:'Segoe UI',sans-serif;font-weight:700" x="785" y="224">⚠ HIGH PRESSURE</text>
@@ -495,10 +496,10 @@ canvas.sp{width:100%;height:36px;display:block}
       <b>High Level:</b> LIT_x &gt; 950<br>
       <b>pH Interlock:</b> AIT_202 &gt; 900 or &lt; 550<br>
       <b>UF Backwash:</b> DPIT_301 &gt; 600 or BW_timer &gt; 18000<br>
-      <b>High Pressure:</b> PIT_501 &gt; 1800 or PIT_502 &gt; 300<br>
+      <b>High Pressure:</b> PIT_501 &gt; 1800 or PIT_502 &gt; 30<br>
       <b>RO CIP:</b> RO_Fouling &gt; 80 or last_clean &gt; 1000<br>
       <b>Chem Low:</b> any tank &lt; 15%<br>
-        <b>High Fouling:</b> UF_Fouling &gt; 80 or RO_Fouling &gt; 80
+      <span style="color:#d97706">⚠ ST has PIT_501 &gt; 200 — fix to &gt; 1800</span>
     </div>
   </div>
   <!-- Event log -->
@@ -582,7 +583,7 @@ function simTick(){
   if(S.AIT_202>900||S.AIT_202<550){S.P_101=false;S.P_102=false;S.P_301=false;S.P_401=false;}
 
   /* Chemical low alarm */
-  S.Chemical_Low_Alarm=S.Acid_Tank_Level<15||S.Chlorine_Tank_Level<15||S.Coagulant_Tank_Level<15;
+  S.Chemical_Low_Alarm=S.Acid_Tank_Level<15||S.Chlorine_Tank_Level<15||S.Coagulant_Tank_Level<15||S.Bisulfate_Tank_Level<15;
 
   /* Stage 3 UF physics */
   if(S.P_301&&!S.UF_Backwash_Active){
@@ -607,7 +608,7 @@ function simTick(){
 
   /* Stage 4 ST control */
   S.P_401=S.LIT_401>200;S.UV_401=S.P_401;
-  S.P_403=S.P_401&&S.Chlorine_Residual>30; /* bisulfate when Cl>30 (3.0 mg/L) */
+  S.P_403=S.P_401&&S.Chlorine_Residual>20; /* bisulfate when Cl>20 (2.0 mg/L) */
   const Qdc=S.P_401?(S.LIT_401>700?60:S.LIT_401>500?50:40):10;
   S.FIT_401=Qdc;
   S.LIT_401=clamp(S.LIT_401+(S.FIT_301/360-Qdc/360)*dt,0,1000);
@@ -637,7 +638,7 @@ function simTick(){
   /* Alarm consolidation — matches ST exactly */
   S.High_Level_Alarm=S.LIT_101>950||S.LIT_301>950||S.LIT_401>950;
   /* NOTE: ST has PIT_501 > 200 (BUG — should be > 1800). Dashboard uses correct 1800. */
-  S.High_Pressure_Alarm=S.PIT_501>1800||S.PIT_502>300;
+  S.High_Pressure_Alarm=S.PIT_501>1800||S.PIT_502>30;
   S.System_Run=!S.High_Pressure_Alarm&&!S.High_Level_Alarm;
 
   /* Attack injection */
@@ -660,7 +661,7 @@ function updateDOM(){
   kpi('k-l3',S.LIT_301.toFixed(0),S.LIT_301>950?'alarm':S.LIT_301<100?'warn':'blue');
   kpi('k-l4',S.LIT_401.toFixed(0),S.LIT_401>950?'alarm':S.LIT_401<100?'warn':'blue');
   kpi('k-ph',pH.toFixed(2),pH<6||pH>9?'alarm':pH<6.5||pH>8.5?'warn':'ok');
-  kpi('k-cl',(S.Chlorine_Residual/10).toFixed(1),S.Chlorine_Residual<10?'warn':'ok');
+  kpi('k-cl',(S.Chlorine_Residual/10).toFixed(1),S.Chlorine_Residual<10?'alarm':S.Chlorine_Residual<20?'warn':'ok');
   kpi('k-tds',S.TDS_Permeate,S.TDS_Permeate>200?'warn':'ok');
   kpi('k-pit',(S.PIT_501/10).toFixed(1),S.PIT_501>1800?'alarm':S.PIT_501>1500?'warn':'ok');
   kpi('k-uf',S.UF_Fouling_Factor.toFixed(0),S.UF_Fouling_Factor>70?'alarm':S.UF_Fouling_Factor>40?'warn':'ok');
@@ -801,10 +802,10 @@ function updateRegs(){
     ['DPIT-301',(S.DPIT_301/10).toFixed(0),'kPa',S.DPIT_301>600],
     ['UF Fouling',S.UF_Fouling_Factor.toFixed(0),'%',S.UF_Fouling_Factor>70],
     ['PIT-501',(S.PIT_501/10).toFixed(1),'bar',S.PIT_501>1800],
-    ['PIT-502',(S.PIT_502/10).toFixed(1),'bar',S.PIT_502>300],
+    ['PIT-502',(S.PIT_502/10).toFixed(1),'bar',S.PIT_502>30],
     ['RO Fouling',S.RO_Fouling_Factor.toFixed(0),'%',S.RO_Fouling_Factor>70],
     ['TDS Perm.',S.TDS_Permeate,'mg/L',S.TDS_Permeate>200],
-    ['Cl Residual',(S.Chlorine_Residual/10).toFixed(1),'mg/L',S.Chlorine_Residual<10],
+    ['Cl Residual',(S.Chlorine_Residual/10).toFixed(1),'mg/L',S.Chlorine_Residual<20],
     ['FIT-101',S.FIT_101.toFixed(1),'m³/h',false],
     ['FIT-601',(S.FIT_601/10).toFixed(1),'m³/h',false],
     ['Acid Tank',S.Acid_Tank_Level.toFixed(0),'%',S.Acid_Tank_Level<15],

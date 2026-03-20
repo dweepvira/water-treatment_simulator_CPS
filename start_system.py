@@ -419,35 +419,28 @@ Available attacks (pass comma-separated to --include-attacks):
 
         print('  MATLAB physics server is ready.')
 
-        # ── Step 3: Physics bridge ────────────────────────────────────────────
-        print('\n[3/5] Starting physics bridge ...')
+        # ── Step 3: Physics bridge + integrated CSV logger ───────────────────
+        # FIX Issue 1: logging merged into bridge — single process, no duplicate rows.
+        # Old setup launched physics_client.py twice (once without --output, once with)
+        # producing ~1.6× rows at 16 Hz instead of 10 Hz.
+        print('\n[3/4] Starting physics bridge ...')
+        run_dir.mkdir(parents=True, exist_ok=True)
         cmd = [sys.executable, 'matlab_bridge/physics_client.py',
                '--plc-host',    args.host,
                '--plc-port',    str(args.port),
                '--matlab-host', effective_matlab_host,
                '--matlab-port', str(args.matlab_port)]
+        if not args.no_logger:
+            cmd += ['--output',        str(output_csv),
+                    '--metadata-file', str(meta_json)]
         procs.append(subprocess.Popen(cmd))
         time.sleep(3)
-        print('  Physics bridge started.')
+        if not args.no_logger:
+            print(f'  Physics bridge started  →  logging to {output_csv}')
+        else:
+            print('  Physics bridge started (logging disabled).')
 
-    # ── Step 4: Data logger ───────────────────────────────────────────────────
-    if not args.no_logger:
-        print('\n[4/5] Starting data logger ...')
-        run_dir.mkdir(parents=True, exist_ok=True)
-        cmd = [sys.executable, 'matlab_bridge/physics_client.py',
-                '--plc-host',      args.host,
-                '--plc-port',      str(args.port),
-                '--matlab-host',   effective_matlab_host,
-                '--matlab-port',   str(args.matlab_port),
-                '--output',        str(output_csv),          # ← add
-                '--metadata-file', str(meta_json)]           # ← add
-        procs.append(subprocess.Popen(cmd))
-        time.sleep(3)
-        print(f'  Data logger started  →  {output_csv}')
-    else:
-        print('\n[4/5] Data logger skipped (--no-logger).')
-
-    # ── Step 5: Attack injector (optional) ────────────────────────────────────
+    # ── Step 4: Attack injector (optional) ────────────────────────────────────
     attack_proc = None
     if args.include_attacks:
         attack_script = Path(args.attack_script)
@@ -455,7 +448,7 @@ Available attacks (pass comma-separated to --include-attacks):
             print(f'\n[5/5] WARNING: Attack script not found: {attack_script}')
             print('       Continuing without attack injection.')
         else:
-            print(f'\n[5/5] Starting attack injector ...')
+            print(f'\n[4/4] Starting attack injector ...')
             # Wait for logger and bridge to stabilise before injecting
             time.sleep(5)
             cmd = [sys.executable, str(attack_script),
@@ -474,7 +467,7 @@ Available attacks (pass comma-separated to --include-attacks):
             if args.attack:
                 print(f'  Attack duration : {args.attack} min')
     else:
-        print('\n[5/5] No attacks specified — logging normal operation only.')
+        print('\n[4/4] No attacks specified — logging normal operation only.')
 
     # ── Summary ───────────────────────────────────────────────────────────────
     print('\n' + '=' * 60)

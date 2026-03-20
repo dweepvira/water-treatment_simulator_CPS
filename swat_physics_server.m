@@ -189,7 +189,7 @@ function [s, r] = step_physics(s, act, dt)
     s.Acid_Tank_Level      = tank_refill(s.Acid_Tank_Level,      15, 80, 2*dt);
     s.Chlorine_Tank_Level  = tank_refill(s.Chlorine_Tank_Level,  15, 85, 2*dt);
     s.Coagulant_Tank_Level = tank_refill(s.Coagulant_Tank_Level, 15, 75, 2*dt);
-    s.Bisulfate_Tank_Level = tank_refill(s.Bisulfate_Tank_Level, 15, 70, 2*dt);
+    s.Bisulfate_Tank_Level = tank_refill(s.Bisulfate_Tank_Level, 15, 85, 2*dt);
 
     %% Stage 3
     P_301 = get_field(act, 'P_301', false);

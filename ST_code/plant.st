@@ -95,10 +95,12 @@ VAR
     System_Run          : BOOL := TRUE;
 END_VAR
 
-(* ================================================================ *)
-(* STAGE 1 CONTROL — pump/valve decisions based on sensor registers  *)
-(* Physics (LIT_101 dynamics) computed externally by MATLAB.        *)
-(* ================================================================ *)
+
+
+
+(* ════════════════════════════════════════════════════════════════════════════ *)
+(* STAGE 1 CONTROL — Raw water intake                                          *)
+(* ════════════════════════════════════════════════════════════════════════════ *)
 
 IF LIT_101 < 450 THEN
     MV_101 := 1;
@@ -119,9 +121,9 @@ IF LIT_101 < 50 THEN
     P_102 := FALSE;
 END_IF;
 
-(* ================================================================ *)
-(* STAGE 2 CONTROL — chemical dosing decisions                       *)
-(* ================================================================ *)
+(* ════════════════════════════════════════════════════════════════════════════ *)
+(* STAGE 2 CONTROL — Chemical dosing                                           *)
+(* ════════════════════════════════════════════════════════════════════════════ *)
 
 IF P_101 OR P_102 THEN
     IF AIT_202 > 750 THEN
@@ -147,6 +149,11 @@ ELSE
     P_206 := FALSE;
 END_IF;
 
+(* Reserved pumps — always off until logic is added *)
+P_201 := FALSE;
+P_202 := FALSE;
+P_204 := FALSE;
+
 (* pH safety interlock *)
 IF AIT_202 > 900 OR AIT_202 < 550 THEN
     P_101 := FALSE;
@@ -162,9 +169,15 @@ ELSE
     Chemical_Low_Alarm := FALSE;
 END_IF;
 
-(* ================================================================ *)
-(* STAGE 3 CONTROL — UF and backwash decisions                       *)
-(* ================================================================ *)
+IF P_101 OR P_102 THEN
+    MV_201 := 1;
+ELSE
+    MV_201 := 0;
+END_IF;
+
+(* ════════════════════════════════════════════════════════════════════════════ *)
+(* STAGE 3 CONTROL — Ultrafiltration and backwash                              *)
+(* ════════════════════════════════════════════════════════════════════════════ *)
 
 IF LIT_301 > 200 AND LIT_401 < 800 THEN
     MV_301 := 1;
@@ -176,7 +189,9 @@ ELSE
     P_301  := FALSE;
 END_IF;
 
-IF DPIT_301 > 55 OR UF_Last_Backwash > 500 THEN
+(* FIXED: DPIT_301 threshold corrected from 55 to 600 (= 60 kPa × 10)        *)
+(* FIXED: UF_Last_Backwash threshold corrected from 500 to 18000 (= 30 min)  *)
+IF DPIT_301 > 600 OR UF_Last_Backwash > 18000 THEN
     UF_Backwash_Active  := TRUE;
     P_301  := FALSE;
     P_602  := TRUE;
@@ -191,9 +206,11 @@ ELSE
     High_Fouling_Alarm  := FALSE;
 END_IF;
 
-(* ================================================================ *)
-(* STAGE 4 CONTROL — UV / dechlorination                             *)
-(* ================================================================ *)
+P_302 := FALSE;   (* Reserved *)
+
+(* ════════════════════════════════════════════════════════════════════════════ *)
+(* STAGE 4 CONTROL — UV / Dechlorination                                       *)
+(* ════════════════════════════════════════════════════════════════════════════ *)
 
 IF LIT_401 > 200 THEN
     P_401  := TRUE;
@@ -209,15 +226,12 @@ ELSE
     P_403  := FALSE;
 END_IF;
 
-IF P_101 OR P_102 THEN
-    MV_201 := 1;
-ELSE
-    MV_201 := 0;
-END_IF;
+P_402 := FALSE;   (* Reserved *)
+P_404 := FALSE;   (* Reserved *)
 
-(* ================================================================ *)
-(* STAGE 5 CONTROL — RO high-pressure pump                           *)
-(* ================================================================ *)
+(* ════════════════════════════════════════════════════════════════════════════ *)
+(* STAGE 5 CONTROL — RO high-pressure pump                                     *)
+(* ════════════════════════════════════════════════════════════════════════════ *)
 
 IF P_401 AND LIT_401 > 200 THEN
     P_501 := TRUE;
@@ -233,9 +247,11 @@ ELSE
     RO_Cleaning_Active := FALSE;
 END_IF;
 
-(* ================================================================ *)
-(* STAGE 6 CONTROL — distribution                                    *)
-(* ================================================================ *)
+P_502 := FALSE;   (* Reserved *)
+
+(* ════════════════════════════════════════════════════════════════════════════ *)
+(* STAGE 6 CONTROL — Distribution                                              *)
+(* ════════════════════════════════════════════════════════════════════════════ *)
 
 IF P_501 THEN
     P_601 := TRUE;
@@ -245,9 +261,9 @@ ELSE
     P_603 := FALSE;
 END_IF;
 
-(* ================================================================ *)
-(* ALARM CONSOLIDATION                                               *)
-(* ================================================================ *)
+(* ════════════════════════════════════════════════════════════════════════════ *)
+(* ALARM CONSOLIDATION                                                         *)
+(* ════════════════════════════════════════════════════════════════════════════ *)
 
 IF LIT_101 > 950 OR LIT_301 > 950 OR LIT_401 > 950 THEN
     High_Level_Alarm := TRUE;
@@ -255,16 +271,21 @@ ELSE
     High_Level_Alarm := FALSE;
 END_IF;
 
-IF PIT_501 > 200 THEN
+(* PIT_501 > 200 → >20 bar: over-pressure trip *)
+IF PIT_501 > 2000 THEN
     High_Pressure_Alarm := TRUE;
 ELSE
     High_Pressure_Alarm := FALSE;
 END_IF;
 
-IF High_Pressure_Alarm THEN
+(* PIT_502 permeate-side guard (>3 bar = membrane breach risk) *)
+IF PIT_502 > 300 THEN
+    High_Pressure_Alarm := TRUE;
+END_IF;
+
+(* SIMPLIFIED from original redundant ELSIF chain *)
+IF High_Pressure_Alarm OR High_Level_Alarm THEN
     System_Run := FALSE;
-ELSIF High_Level_Alarm THEN
-    System_Run := FALSE;
-ELSIF NOT High_Pressure_Alarm AND NOT High_Level_Alarm THEN
+ELSE
     System_Run := TRUE;
 END_IF;

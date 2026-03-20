@@ -1342,36 +1342,61 @@ class ComprehensiveDatasetGenerator:
                 total_used += duration
                 current_time += duration + random.randint(60, 180)  # Gap
         
-        # Phase 2: Fill remaining with temporal attacks
-        MIN_DURATION = 300  # 5 minutes
-        MAX_DURATION = 600  # 10 minutes
+        # Phase 2: Fill remaining with temporal attacks.
+        # FIX Issue 2: guarantee at least one execution of EVERY temporal attack
+        # before random-filling so slow_ramp (and others) are never skipped.
+        MIN_DURATION = 300   # 5 minutes
+        MAX_DURATION = 600   # 10 minutes
+
+        # First pass: one guaranteed run per temporal attack (shuffled order)
+        guaranteed = list(self.temporal_attacks)
+        random.shuffle(guaranteed)
+        for attack_type in guaranteed:
+            remaining = self.attack_duration - total_used
+            if remaining < MIN_DURATION:
+                break
+            duration = random.randint(MIN_DURATION, min(MAX_DURATION, remaining))
+            meta   = self.attack_meta[attack_type]
+            params = self._random_params(attack_type)
+            schedule.append({
+                'start_time': current_time,
+                'duration':   duration,
+                'type':       attack_type,
+                'name':       meta['name'],
+                'mitre_id':   meta['mitre'],
+                'id':         meta['id'],
+                'params':     params,
+            })
+            total_used   += duration
+            current_time += duration + random.randint(60, 180)
+
+        # Second pass: random-fill any remaining budget
         while total_used < self.attack_duration:
             remaining = self.attack_duration - total_used
-            
             if remaining < MIN_DURATION:
-                break  # Done
-            
+                break
+
             attack_type = random.choice(self.temporal_attacks)
             duration = random.randint(MIN_DURATION, MAX_DURATION)
-            
+
             if duration > remaining:
                 duration = remaining
-            
-            meta = self.attack_meta[attack_type]
+
+            meta   = self.attack_meta[attack_type]
             params = self._random_params(attack_type)
-            
+
             event = {
                 'start_time': current_time,
-                'duration': duration,
-                'type': attack_type,
-                'name': meta['name'],
-                'mitre_id': meta['mitre'],
-                'id': meta['id'],
-                'params': params,
+                'duration':   duration,
+                'type':       attack_type,
+                'name':       meta['name'],
+                'mitre_id':   meta['mitre'],
+                'id':         meta['id'],
+                'params':     params,
             }
-            
+
             schedule.append(event)
-            total_used += duration
+            total_used   += duration
             current_time += duration + random.randint(60, 180)
         
         # Sort by start time
@@ -1438,33 +1463,12 @@ class ComprehensiveDatasetGenerator:
             return {}
     
     def start_logging(self):
-        self.log("Starting background data logger...")
-
-        cmd = [
-            sys.executable,
-            str(Path('logging') / 'data_logger.py'),
-            '--host',          self.plc_host,
-            '--port',          str(self.plc_port),
-            '--interval',      '0.1',
-            '--output',        str(self.master_csv),
-            '--metadata-file', str(self.metadata_file),
-        ]
-        self.log(f"  cmd: {' '.join(cmd)}")
-
-        self.logger_proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-        time.sleep(5)
-
-        if self.logger_proc.poll() is None:
-            self.log(f"  Logger started (PID {self.logger_proc.pid})")
-        else:
-            out, err = self.logger_proc.communicate()
-            self.log(f"Logger STDOUT: {out.decode()}", 'ERROR')
-            self.log(f"Logger STDERR: {err.decode()}", 'ERROR')
-            raise RuntimeError("Logger failed to start")
+        # FIX Issue 1: logging is now integrated into physics_client.py.
+        # The bridge reads --metadata-file on every cycle and stamps each CSV row.
+        # Launching data_logger.py here was the source of 16 Hz double-logging.
+        # Nothing to start — the bridge handles it.
+        self.log("Logging handled by physics_client.py bridge (integrated logger).")
+        self.logger_proc = None
     
     def execute_attack(self, event: Dict):
         """Execute single attack."""
@@ -1519,8 +1523,16 @@ class ComprehensiveDatasetGenerator:
                 self.log(f"  Command: {' '.join(cmd)}")
                 
                 proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                stdout, stderr = proc.communicate()
-                success = (proc.returncode == 0)
+                # FIX Issue 3: enforce duration with timeout — attack cannot
+                # run longer than its scheduled slot + 10 s grace period.
+                try:
+                    stdout, stderr = proc.communicate(timeout=duration + 10)
+                    success = (proc.returncode == 0)
+                except subprocess.TimeoutExpired:
+                    self.log(f"  TIMEOUT: {attack_type} exceeded {duration}s — killing process", 'WARNING')
+                    proc.kill()
+                    stdout, stderr = proc.communicate()
+                    success = True  # data was collected for the full duration
 
                 if not success:
                     if stdout:
