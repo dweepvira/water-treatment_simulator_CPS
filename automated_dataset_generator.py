@@ -1421,16 +1421,13 @@ class ComprehensiveDatasetGenerator:
     def _random_params(self, attack_type: str) -> Dict:
         """Generate random parameters for attack."""
         if attack_type == 'ph_manipulation':
-            # Bimodal: acidic attacks (pH < 5.5 → trips interlock, clear downward drift)
-            # or alkaline attacks (pH > 8.0, approaches interlock ceiling at 9.0).
-            # Both ranges sit well outside the normal operating band (6.80–7.50)
-            # so the exponential curve is fully visible in the dataset.
+
             if random.random() < 0.6:
-                return {'target_ph': random.uniform(4.8, 5.4)}   # Acidic
+                return {'target_ph': random.uniform(4.8, 5.5)}   # Acidic — below 6.8 floor
             else:
-                return {'target_ph': random.uniform(8.0, 8.8)}   # Alkaline
+                return {'target_ph': random.uniform(8.6, 9.0)} 
         elif attack_type == 'tank_overflow':
-            return {'overflow_value': random.randint(950, 1100)}
+            return {'overflow_value': random.randint(970, 1100)}
         elif attack_type == 'membrane_damage':
             return {'target_tmp': random.randint(500, 700)}
         elif attack_type == 'slow_ramp':
@@ -1438,7 +1435,7 @@ class ComprehensiveDatasetGenerator:
                 return {
                     'ramp_target': 'AIT_202',
                     'start_value': random.randint(700, 740),
-                    'end_value': random.randint(520, 580),
+                    'end_value': random.randint(850, 900),
                     'step_size': 1,
                     'step_interval': 2.0,
                 }
@@ -1551,7 +1548,7 @@ class ComprehensiveDatasetGenerator:
         
         finally:
             # Always reset to normal
-            self.metadata.update(0, 'Normal', 'T0000')
+            self.metadata.update(0, 'Normal', 'T0')
     
     def run(self):
         """Main execution."""

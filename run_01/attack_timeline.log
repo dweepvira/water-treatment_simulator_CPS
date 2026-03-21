@@ -1,7 +1,7 @@
 ATTACK SCHEDULE
 ======================================================================
-[ 1] Reconnaissance Scan                 @   1.0min  dur= 193s
-[ 2] Replay Attack                       @   5.6min  dur= 202s
-[ 3] pH Manipulation Attack              @  11.2min  dur= 507s
-[ 4] Slow Ramp Attack                    @  21.1min  dur= 577s
-[ 5] Slow Ramp Attack                    @  33.6min  dur= 321s
+[ 1] Reconnaissance Scan                 @   1.0min  dur= 248s
+[ 2] Replay Attack                       @   6.7min  dur= 233s
+[ 3] Slow Ramp Attack                    @  13.3min  dur= 346s
+[ 4] pH Manipulation Attack              @  21.2min  dur= 468s
+[ 5] Slow Ramp Attack                    @  32.0min  dur= 384s

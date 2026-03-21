@@ -159,14 +159,23 @@ def _kill_port_owner(port: int) -> bool:
 def _cleanup(procs: list) -> None:
     for p in procs:
         try:
-            p.terminate()
+            if platform.system() == 'Windows':
+                # /T kills entire process tree — catches orphaned grandchildren
+                # (e.g. physics_client.py stuck in TCP recv)
+                subprocess.call(
+                    ['taskkill', '/F', '/T', '/PID', str(p.pid)],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+            else:
+                import os as _os, signal as _sig
+                try:
+                    _os.killpg(_os.getpgid(p.pid), _sig.SIGTERM)
+                except Exception:
+                    p.terminate()
             p.wait(timeout=5)
         except Exception:
-            try:
-                p.kill()
-            except Exception:
-                pass
-
+            try: p.kill()
+            except Exception: pass
 
 def tail_file(path: Path, max_lines: int = 20) -> str:
     if not path.exists():
@@ -433,6 +442,8 @@ Available attacks (pass comma-separated to --include-attacks):
         if not args.no_logger:
             cmd += ['--output',        str(output_csv),
                     '--metadata-file', str(meta_json)]
+            if args.total:
+                cmd += ['--total-minutes', str(args.total + 2)]
         procs.append(subprocess.Popen(cmd))
         time.sleep(3)
         if not args.no_logger:

@@ -904,7 +904,13 @@ function toggleWS(){
   try{
     ws=new WebSocket(url);
     ws.onopen=()=>{ge('ws-led').classList.add('on');ge('ws-lbl').textContent='Live';ge('ws-btn').textContent='Disconnect';logEv('WebSocket connected — live data active','info');};
-    ws.onmessage=(e)=>{try{const d=JSON.parse(e.data);Object.assign(S,d);pushH();}catch(err){}};
+    ws.onmessage=(e)=>{try{const d=JSON.parse(e.data);
+        if (d.AIT_202) {
+          phHistory.push(d.AIT_202);
+        if (phHistory.length > 5) phHistory.shift();
+          d.AIT_202 = phHistory.slice().sort((a,b)=>a-b)[Math.floor(phHistory.length/2)];
+      }
+    Object.assign(S,d);pushH();}catch(err){}};
     ws.onclose=()=>{ge('ws-led').classList.remove('on');ge('ws-lbl').textContent='Simulated';ge('ws-btn').textContent='Connect';};
     ws.onerror=()=>logEv('WebSocket error — is ws_server.py running?','crit');
   }catch(e){logEv('Invalid WebSocket URL','crit');}
