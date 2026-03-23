@@ -1425,7 +1425,7 @@ class ComprehensiveDatasetGenerator:
             if random.random() < 0.6:
                 return {'target_ph': random.uniform(4.8, 5.5)}   # Acidic — below 6.8 floor
             else:
-                return {'target_ph': random.uniform(8.6, 9.0)} 
+                return {'target_ph': random.uniform(8.7, 9.3)} 
         elif attack_type == 'tank_overflow':
             return {'overflow_value': random.randint(970, 1100)}
         elif attack_type == 'membrane_damage':

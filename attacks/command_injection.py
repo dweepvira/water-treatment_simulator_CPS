@@ -1000,7 +1000,7 @@ Examples:
     parser.add_argument('--no-accelerate-fouling', action='store_true')
 
     # ── pH manipulation ───────────────────────────────────────────────────
-    parser.add_argument('--target-ph', type=float, default=5.0,
+    parser.add_argument('--target-ph', type=float,
                         help='Target pH (float). 6.8-8.5 = coil-only (no oscillation). '
                              'Outside this range = register write at 12.5 Hz.')
     parser.add_argument('--no-disable-dosing', action='store_true')

@@ -499,7 +499,7 @@ canvas.sp{width:100%;height:36px;display:block}
       <b>High Pressure:</b> PIT_501 &gt; 1800 or PIT_502 &gt; 30<br>
       <b>RO CIP:</b> RO_Fouling &gt; 80 or last_clean &gt; 1000<br>
       <b>Chem Low:</b> any tank &lt; 15%<br>
-      <span style="color:#d97706">⚠ ST has PIT_501 &gt; 200 — fix to &gt; 1800</span>
+      
     </div>
   </div>
   <!-- Event log -->
@@ -908,7 +908,7 @@ function toggleWS(){
         if (d.AIT_202) {
           phHistory.push(d.AIT_202);
         if (phHistory.length > 5) phHistory.shift();
-          d.AIT_202 = phHistory.slice().sort((a,b)=>a-b)[Math.floor(phHistory.length/2)];
+        d.AIT_202 = phHistory.slice().sort((a,b)=>a-b)[Math.floor(phHistory.length/2)];
       }
     Object.assign(S,d);pushH();}catch(err){}};
     ws.onclose=()=>{ge('ws-led').classList.remove('on');ge('ws-lbl').textContent='Simulated';ge('ws-btn').textContent='Connect';};
