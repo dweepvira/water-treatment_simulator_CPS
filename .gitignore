@@ -1,5 +1,7 @@
 __pycache__/
-
+run_*/
+*.csv
+*.npy
 .env
 venv/
 .venv/

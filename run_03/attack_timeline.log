@@ -1,7 +1,0 @@
-ATTACK SCHEDULE
-======================================================================
-[ 1] Reconnaissance Scan                 @   1.0min  dur= 280s
-[ 2] Replay Attack                       @   8.4min  dur= 252s
-[ 3] Tank Overflow Attack                @  13.7min  dur= 356s
-[ 4] Valve Manipulation Attack           @  20.7min  dur= 565s
-[ 5] Tank Overflow Attack                @  33.1min  dur= 347s

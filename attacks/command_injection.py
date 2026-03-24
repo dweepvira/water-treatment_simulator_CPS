@@ -685,7 +685,7 @@ class pHManipulationAttack(BaseAttack):
         #   P_203 ON  → pH settles at 6.80 (register 680)
         #   P_203 OFF → pH settles at 8.50 (register 850)
         matlab_natural_min = 680   # P_203 ON  → pH 6.80
-        matlab_natural_max = 850   # P_203 OFF → pH 8.50
+        matlab_natural_max = 840   # P_203 OFF → pH 8.50
 
         needs_register_write = (target_ph < matlab_natural_min) or (target_ph > matlab_natural_max)
 

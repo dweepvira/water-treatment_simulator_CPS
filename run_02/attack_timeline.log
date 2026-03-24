@@ -1,7 +1,0 @@
-ATTACK SCHEDULE
-======================================================================
-[ 1] Reconnaissance Scan                 @   1.0min  dur= 253s
-[ 2] Replay Attack                       @   6.8min  dur= 238s
-[ 3] Membrane Damage Attack              @  12.5min  dur= 391s
-[ 4] Chemical Depletion Attack           @  21.8min  dur= 513s
-[ 5] Chemical Depletion Attack           @  32.8min  dur= 360s
