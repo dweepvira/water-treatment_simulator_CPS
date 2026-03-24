@@ -1,0 +1,43 @@
+[2026-03-23 20:15:44] [INFO] ======================================================================
+[2026-03-23 20:15:44] [INFO] SWAT DATASET GENERATOR - FIXED VERSION
+[2026-03-23 20:15:44] [INFO] ======================================================================
+[2026-03-23 20:15:44] [INFO] Configuration:
+[2026-03-23 20:15:44] [INFO]   Total: 80 min
+[2026-03-23 20:15:44] [INFO]   Attack: 40 min
+[2026-03-23 20:15:44] [INFO]   Each attack: 5-10 min
+[2026-03-23 20:15:44] [INFO]   Network attacks: 3× each (DOS, Replay, Recon)
+[2026-03-23 20:15:44] [INFO] Generating attack schedule...
+[2026-03-23 20:15:44] [INFO] Schedule generated:
+[2026-03-23 20:15:44] [INFO]   Total duration: 4800s (80min)
+[2026-03-23 20:15:44] [INFO]   Total attack time: 2124s (35.4min)
+[2026-03-23 20:15:44] [INFO]   Number of attacks: 5
+[2026-03-23 20:15:44] [INFO] [SCHEDULE] [ 1] Slow Ramp Attack                    @   1.0min  dur= 444s
+[2026-03-23 20:15:44] [INFO] [SCHEDULE] [ 2] Membrane Damage Attack              @  10.7min  dur= 589s
+[2026-03-23 20:15:44] [INFO] [SCHEDULE] [ 3] pH Manipulation Attack              @  23.1min  dur= 307s
+[2026-03-23 20:15:44] [INFO] [SCHEDULE] [ 4] Chemical Depletion Attack           @  29.6min  dur= 310s
+[2026-03-23 20:15:44] [INFO] [SCHEDULE] [ 5] Membrane Damage Attack              @  37.5min  dur= 474s
+[2026-03-23 20:15:44] [INFO] Logging handled by physics_client.py bridge (integrated logger).
+[2026-03-23 20:15:44] [INFO] Progress: 0.0/80min (0.0%)
+[2026-03-23 20:16:44] [INFO] ▶ ATTACK START: Slow Ramp Attack (444s)
+[2026-03-23 20:16:47] [INFO]   Command: C:\Users\Dweep\miniconda3\envs\test\python.exe attacks/command_injection.py --host 192.168.5.195 --port 1502 --attack slow_ramp --duration 444 --ramp-target AIT_202 --start-value 704 --end-value 883 --step-size 1 --step-interval 2.0
+[2026-03-23 20:24:12] [INFO] ✓ ATTACK COMPLETE: Slow Ramp Attack
+[2026-03-23 20:28:12] [INFO] Progress: 5.0/80min (6.2%)
+[2026-03-23 20:33:12] [INFO] Progress: 10.0/80min (12.5%)
+[2026-03-23 20:33:51] [INFO] ▶ ATTACK START: Membrane Damage Attack (589s)
+[2026-03-23 20:33:54] [INFO]   Command: C:\Users\Dweep\miniconda3\envs\test\python.exe attacks/command_injection.py --host 192.168.5.195 --port 1502 --attack membrane_damage --duration 589 --target-tmp 675
+[2026-03-23 20:43:46] [INFO] ✓ ATTACK COMPLETE: Membrane Damage Attack
+[2026-03-23 20:48:07] [INFO] Progress: 15.0/80min (18.8%)
+[2026-03-23 20:53:08] [INFO] Progress: 20.0/80min (25.0%)
+[2026-03-23 20:56:14] [INFO] ▶ ATTACK START: pH Manipulation Attack (307s)
+[2026-03-23 20:56:17] [INFO]   Command: C:\Users\Dweep\miniconda3\envs\test\python.exe attacks/command_injection.py --host 192.168.5.195 --port 1502 --attack ph_manipulation --duration 307 --target-ph 5.049234571546759
+[2026-03-23 21:01:24] [INFO] ✓ ATTACK COMPLETE: pH Manipulation Attack
+[2026-03-23 21:03:18] [INFO] Progress: 25.0/80min (31.2%)
+[2026-03-23 21:07:55] [INFO] ▶ ATTACK START: Chemical Depletion Attack (310s)
+[2026-03-23 21:07:58] [INFO]   Command: C:\Users\Dweep\miniconda3\envs\test\python.exe attacks/command_injection.py --host 192.168.5.195 --port 1502 --attack chemical_depletion --duration 310
+[2026-03-23 21:13:10] [INFO] ✓ ATTACK COMPLETE: Chemical Depletion Attack
+[2026-03-23 21:13:33] [INFO] Progress: 30.0/80min (37.5%)
+[2026-03-23 21:18:33] [INFO] Progress: 35.0/80min (43.8%)
+[2026-03-23 21:21:00] [INFO] ▶ ATTACK START: Membrane Damage Attack (474s)
+[2026-03-23 21:21:03] [INFO]   Command: C:\Users\Dweep\miniconda3\envs\test\python.exe attacks/command_injection.py --host 192.168.5.195 --port 1502 --attack membrane_damage --duration 474 --target-tmp 650
+[2026-03-23 21:29:00] [INFO] ✓ ATTACK COMPLETE: Membrane Damage Attack
+[2026-03-23 21:31:33] [INFO] Progress: 40.0/80min (50.0%)
