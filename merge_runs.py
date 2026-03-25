@@ -48,14 +48,24 @@ BASELINE_SENSORS = [
 ]
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
-
 def load_run(path: str, run_id: int) -> pd.DataFrame:
-    """Load a single run CSV, parse timestamps, add run_id + elapsed_seconds."""
+    """Load a single run CSV, parse timestamps safely, add run_id + elapsed_seconds."""
     print(f"  Loading run_{run_id:02d}: {path}")
     df = pd.read_csv(path)
 
-    # Parse timestamp
-    df['Timestamp'] = pd.to_datetime(df['Timestamp'])
+    # ✅ FIXED TIMESTAMP PARSING (handles mixed formats)
+    df['Timestamp'] = pd.to_datetime(
+        df['Timestamp'],
+        format='ISO8601',
+        errors='coerce'
+    )
+
+    # Drop bad timestamps
+    bad_ts = df['Timestamp'].isna().sum()
+    if bad_ts > 0:
+        print(f"    ⚠ Dropping {bad_ts} rows with invalid timestamps")
+        df = df.dropna(subset=['Timestamp'])
+
     df = df.sort_values('Timestamp').reset_index(drop=True)
 
     # elapsed_seconds from this run's start
@@ -65,7 +75,7 @@ def load_run(path: str, run_id: int) -> pd.DataFrame:
     # run_id
     df['run_id'] = run_id
 
-    # Fix bool columns that may have loaded as object/int
+    # Fix bool columns
     bool_candidates = df.select_dtypes(include=['object', 'int64']).columns
     for c in bool_candidates:
         unique_vals = set(df[c].dropna().unique())
@@ -76,7 +86,6 @@ def load_run(path: str, run_id: int) -> pd.DataFrame:
             ).astype(bool)
 
     return df
-
 
 def check_schema(dfs: list[pd.DataFrame], run_ids: list[int]) -> list[str]:
     """Verify all runs have consistent column sets. Returns list of warnings."""

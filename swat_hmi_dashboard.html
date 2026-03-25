@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SWaT SCADA — Secure Water Treatment System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-void: #040810;
+  --bg-panel: #070f1c;
+  --bg-card: #0a1628;
+  --bg-elevated: #0f1f38;
+  --border-dim: #1a3050;
+  --border-glow: #1e4a7a;
+  --accent-cyan: #00d4ff;
+  --accent-teal: #00ffc8;
+  --accent-blue: #2979ff;
+  --accent-amber: #ffab00;
+  --accent-red: #ff3d57;
+  --accent-green: #00e676;
+  --accent-purple: #d500f9;
+  --text-primary: #e8f4ff;
+  --text-secondary: #7aa3cc;
+  --text-muted: #3d6080;
+  --glow-cyan: 0 0 12px rgba(0,212,255,.5), 0 0 24px rgba(0,212,255,.2);
+  --glow-red: 0 0 12px rgba(255,61,87,.6), 0 0 24px rgba(255,61,87,.3);
+  --glow-green: 0 0 12px rgba(0,230,118,.5), 0 0 24px rgba(0,230,118,.2);
+  --glow-amber: 0 0 12px rgba(255,171,0,.5), 0 0 24px rgba(255,171,0,.2);
+  --font-mono: 'Share Tech Mono', monospace;
+  --font-ui: 'Rajdhani', sans-serif;
+  --font-display: 'Orbitron', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%; min-height: 100vh;
+  background: var(--bg-void);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  overflow-x: hidden;
+}
+
+/* ═══════════════════════════════════ SCANLINE OVERLAY ═══════════════════════════════════ */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(0,0,0,.15) 2px, rgba(0,0,0,.15) 4px
+  );
+  pointer-events: none; z-index: 9999;
+}
+
+/* ═══════════════════════════════════ TOP HEADER ═══════════════════════════════════ */
+.hmi-header {
+  background: linear-gradient(135deg, #040d1a 0%, #071428 50%, #040d1a 100%);
+  border-bottom: 1px solid var(--border-glow);
+  padding: 0 20px;
+  height: 56px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: relative;
+  box-shadow: 0 2px 20px rgba(0,212,255,.15);
+}
+.hmi-header::after {
+  content: '';
+  position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent-cyan), var(--accent-teal), var(--accent-cyan), transparent);
+}
+
+.header-brand {
+  display: flex; align-items: center; gap: 12px;
+}
+.brand-logo {
+  width: 36px; height: 36px; position: relative;
+}
+.brand-logo svg { width: 100%; height: 100%; }
+.brand-text h1 {
+  font-family: var(--font-display);
+  font-size: 15px; font-weight: 700;
+  color: var(--accent-cyan);
+  letter-spacing: 3px;
+  text-shadow: var(--glow-cyan);
+}
+.brand-text p {
+  font-family: var(--font-mono);
+  font-size: 9px; color: var(--text-secondary); letter-spacing: 2px;
+}
+
+.header-status-bar {
+  display: flex; align-items: center; gap: 24px;
+}
+.sys-status {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-mono); font-size: 11px;
+}
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent-green);
+  box-shadow: var(--glow-green);
+  animation: pulse 2s infinite;
+}
+.status-dot.alarm { background: var(--accent-red); box-shadow: var(--glow-red); animation: blink .5s infinite; }
+.status-dot.warn  { background: var(--accent-amber); box-shadow: var(--glow-amber); animation: blink 1s infinite; }
+
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.7;transform:scale(.9)} }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+.header-clock {
+  font-family: var(--font-mono);
+  font-size: 18px; font-weight: 400;
+  color: var(--accent-cyan);
+  letter-spacing: 2px;
+  text-shadow: var(--glow-cyan);
+}
+.header-date { font-family: var(--font-mono); font-size: 9px; color: var(--text-muted); text-align: right; }
+
+.alarm-badge {
+  background: var(--accent-red); color: #fff;
+  font-family: var(--font-display); font-size: 9px; font-weight: 700;
+  padding: 2px 8px; border-radius: 2px;
+  letter-spacing: 1px;
+  box-shadow: var(--glow-red);
+  display: none;
+}
+.alarm-badge.active { display: block; animation: blink .5s infinite; }
+
+/* ═══════════════════════════════════ LAYOUT ═══════════════════════════════════ */
+.hmi-layout {
+  display: grid;
+  grid-template-columns: 200px 1fr 220px;
+  grid-template-rows: auto 1fr auto;
+  height: calc(100vh - 56px);
+  gap: 0;
+}
+
+/* ═══════════════════════════════════ LEFT SIDEBAR ═══════════════════════════════════ */
+.sidebar-left {
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border-dim);
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+}
+
+.sidebar-section {
+  border-bottom: 1px solid var(--border-dim);
+  padding: 10px;
+}
+.sidebar-title {
+  font-family: var(--font-display);
+  font-size: 8px; letter-spacing: 2px; color: var(--text-muted);
+  text-transform: uppercase; margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-dim);
+}
+
+/* KPI Cards */
+.kpi-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-dim);
+  border-radius: 3px;
+  padding: 8px;
+  margin-bottom: 6px;
+  position: relative;
+  overflow: hidden;
+  cursor: default;
+  transition: border-color .2s;
+}
+.kpi-card:hover { border-color: var(--accent-cyan); }
+.kpi-card::before {
+  content: ''; position: absolute;
+  left: 0; top: 0; bottom: 0; width: 2px;
+  background: var(--accent-cyan);
+  box-shadow: var(--glow-cyan);
+}
+.kpi-card.warn::before { background: var(--accent-amber); box-shadow: var(--glow-amber); }
+.kpi-card.alarm::before { background: var(--accent-red); box-shadow: var(--glow-red); animation: blink .5s infinite; }
+.kpi-card.ok::before { background: var(--accent-green); box-shadow: var(--glow-green); }
+
+.kpi-label {
+  font-family: var(--font-mono); font-size: 9px;
+  color: var(--text-muted); letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.kpi-value {
+  font-family: var(--font-mono); font-size: 20px;
+  color: var(--accent-cyan);
+  line-height: 1.1; margin-top: 2px;
+}
+.kpi-value.ok { color: var(--accent-green); }
+.kpi-value.warn { color: var(--accent-amber); }
+.kpi-value.alarm { color: var(--accent-red); }
+.kpi-unit { font-size: 10px; color: var(--text-secondary); margin-left: 2px; }
+.kpi-bar-track {
+  height: 3px; background: var(--border-dim);
+  border-radius: 2px; margin-top: 4px; overflow: hidden;
+}
+.kpi-bar-fill {
+  height: 100%; border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-teal));
+  transition: width .5s ease;
+}
+
+/* ═══════════════════════════════════ MAIN PID AREA ═══════════════════════════════════ */
+.pid-main {
+  background: var(--bg-void);
+  position: relative;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+}
+
+.pid-toolbar {
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-dim);
+  padding: 6px 16px;
+  display: flex; align-items: center; gap: 16px;
+}
+.toolbar-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border-dim);
+  color: var(--text-secondary);
+  font-family: var(--font-mono); font-size: 10px;
+  padding: 4px 12px; border-radius: 2px;
+  cursor: pointer; letter-spacing: 1px;
+  transition: all .15s;
+}
+.toolbar-btn:hover, .toolbar-btn.active {
+  border-color: var(--accent-cyan); color: var(--accent-cyan);
+  box-shadow: var(--glow-cyan);
+}
+.toolbar-btn.attack-btn {
+  background: rgba(255,61,87,.1);
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+}
+.toolbar-btn.attack-btn:hover {
+  background: rgba(255,61,87,.25);
+  box-shadow: var(--glow-red);
+}
+.toolbar-sep { width: 1px; height: 20px; background: var(--border-dim); }
+.toolbar-label { font-family: var(--font-mono); font-size: 9px; color: var(--text-muted); letter-spacing: 1px; }
+
+.pid-svg-wrap {
+  flex: 1;
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+  position: relative;
+}
+
+/* ═══════════════════════════════════ PID SVG STYLES ═══════════════════════════════════ */
+.pid-bg {
+  background: var(--bg-card);
+  border: 1px solid var(--border-dim);
+  border-radius: 4px;
+  width: 100%; max-width: 1100px;
+  box-shadow: inset 0 0 40px rgba(0,0,0,.5);
+}
+
+/* Flow pipes */
+.pipe { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.flow-active {
+  stroke-dasharray: 8 5;
+  animation: flowAnim 1.2s linear infinite;
+}
+.flow-bw {
+  stroke-dasharray: 8 5;
+  animation: flowAnim 1.2s linear infinite reverse;
+}
+.pipe-dead { opacity: .2; }
+@keyframes flowAnim { to { stroke-dashoffset: -26; } }
+
+/* Tanks */
+.tank-shell { fill: none; stroke: #1a3a60; stroke-width: 1.5; }
+.tank-bg { fill: #050d1a; }
+.tank-water { transition: height .6s ease, y .6s ease; }
+.tank-label { font-family: 'Share Tech Mono', monospace; font-size: 9px; fill: #7aa3cc; }
+.tank-val { font-family: 'Share Tech Mono', monospace; font-size: 11px; fill: #e8f4ff; font-weight: bold; }
+
+/* Pump circles */
+.pump-ring { fill: none; stroke-width: 1.5; }
+.pump-on { fill: rgba(0,212,255,.12); stroke: var(--accent-cyan); }
+.pump-off { fill: rgba(26,48,80,.3); stroke: #1a3050; }
+.pump-arrow-on { fill: var(--accent-cyan); }
+.pump-arrow-off { fill: #1a3050; }
+.pump-label-t { font-family: 'Share Tech Mono', monospace; font-size: 8px; fill: #7aa3cc; }
+
+/* Valves */
+.valve-open { fill: rgba(0,230,118,.12); stroke: var(--accent-green); stroke-width: 1.5; }
+.valve-closed { fill: rgba(26,48,80,.3); stroke: #1a3050; stroke-width: 1; }
+.valve-warn { fill: rgba(255,61,87,.12); stroke: var(--accent-red); stroke-width: 1.5; animation: blink .5s infinite; }
+
+/* Sensor indicators */
+.sensor-ok { fill: var(--accent-green); }
+.sensor-warn { fill: var(--accent-amber); animation: blink 1s infinite; }
+.sensor-alarm { fill: var(--accent-red); animation: blink .5s infinite; }
+.sensor-ring { fill: none; stroke-width: 1; }
+.sensor-ring-ok { stroke: var(--accent-green); }
+.sensor-ring-alarm { stroke: var(--accent-red); }
+.sensor-text { font-family: 'Share Tech Mono', monospace; font-size: 8px; }
+
+/* Stage separators */
+.stage-divider { stroke: #1a2a40; stroke-dasharray: 3 8; }
+.stage-label { font-family: 'Orbitron', monospace; font-size: 8px; fill: #2a4a70; letter-spacing: 2px; text-transform: uppercase; text-anchor: middle; }
+
+/* Membranes */
+.membrane-shell { fill: rgba(41,121,255,.08); stroke: var(--accent-blue); stroke-width: 1; stroke-dasharray: 4 3; }
+.membrane-label { font-family: 'Share Tech Mono', monospace; font-size: 9px; fill: #5080cc; text-anchor: middle; }
+
+/* Alarm banners */
+.alarm-banner { fill: rgba(255,61,87,.12); stroke: var(--accent-red); stroke-width: 1; rx: 3; }
+.alarm-text { font-family: 'Orbitron', monospace; font-size: 7px; fill: var(--accent-red); text-anchor: middle; animation: blink .5s infinite; }
+
+/* UV glow */
+.uv-glow { fill: rgba(213,0,249,.15); stroke: var(--accent-purple); stroke-width: 1.5; }
+.uv-active { animation: uvPulse 1.5s ease-in-out infinite; }
+@keyframes uvPulse { 0%,100%{opacity:.6} 50%{opacity:1} }
+
+/* ═══════════════════════════════════ BOTTOM STRIP ═══════════════════════════════════ */
+.bottom-strip {
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border-dim);
+  padding: 8px 16px;
+  display: flex; align-items: center; gap: 8px;
+  overflow-x: auto;
+}
+.spark-item { min-width: 130px; }
+.spark-label { font-family: var(--font-mono); font-size: 8px; color: var(--text-muted); letter-spacing: 1px; margin-bottom: 2px; }
+.spark-canvas { display: block; width: 130px; height: 32px; }
+.strip-sep { width: 1px; height: 44px; background: var(--border-dim); flex-shrink: 0; }
+
+/* ═══════════════════════════════════ RIGHT SIDEBAR ═══════════════════════════════════ */
+.sidebar-right {
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border-dim);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+/* Coil grid */
+.coil-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
+.coil-chip {
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: .5px;
+  padding: 3px 5px; border-radius: 2px; text-align: center;
+  border: 1px solid; cursor: default;
+  transition: all .2s;
+}
+.coil-on { background: rgba(0,212,255,.12); border-color: rgba(0,212,255,.4); color: var(--accent-cyan); }
+.coil-off { background: rgba(26,48,80,.2); border-color: var(--border-dim); color: var(--text-muted); }
+.coil-alarm { background: rgba(255,61,87,.12); border-color: var(--accent-red); color: var(--accent-red); animation: blink .5s infinite; }
+
+/* Event log */
+.event-log {
+  flex: 1; overflow-y: auto;
+  font-family: var(--font-mono);
+}
+.event-log::-webkit-scrollbar { width: 4px; }
+.event-log::-webkit-scrollbar-thumb { background: var(--border-dim); border-radius: 2px; }
+.ev-row {
+  display: flex; gap: 6px; align-items: flex-start;
+  padding: 4px 10px; border-bottom: 1px solid rgba(26,48,80,.3);
+  font-size: 9px; line-height: 1.4;
+}
+.ev-time { color: var(--text-muted); min-width: 50px; flex-shrink: 0; }
+.ev-msg { color: var(--text-secondary); flex: 1; }
+.ev-row.crit .ev-msg { color: var(--accent-red); font-weight: bold; }
+.ev-row.warn .ev-msg { color: var(--accent-amber); }
+.ev-row.ok .ev-msg { color: var(--accent-green); }
+.ev-row.info .ev-msg { color: var(--accent-cyan); }
+
+/* Attack panel */
+.attack-panel {
+  border-top: 1px solid var(--border-dim);
+  padding: 8px 10px;
+  background: rgba(255,61,87,.04);
+}
+.attack-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; margin-bottom: 6px; }
+.atk-btn {
+  background: var(--bg-card); border: 1px solid var(--border-dim);
+  color: var(--text-muted); font-family: var(--font-mono); font-size: 8px;
+  padding: 4px; border-radius: 2px; cursor: pointer; text-align: center;
+  transition: all .15s; letter-spacing: .5px;
+}
+.atk-btn:hover { border-color: var(--accent-red); color: var(--accent-red); }
+.atk-btn.active { background: rgba(255,61,87,.15); border-color: var(--accent-red); color: var(--accent-red); box-shadow: var(--glow-red); }
+
+/* Scrollbars */
+.sidebar-left::-webkit-scrollbar, .sidebar-right::-webkit-scrollbar { width: 4px; }
+.sidebar-left::-webkit-scrollbar-thumb, .sidebar-right::-webkit-scrollbar-thumb { background: var(--border-dim); border-radius: 2px; }
+
+/* Tooltip */
+.hmi-tooltip {
+  position: fixed; z-index: 8000;
+  background: var(--bg-elevated); border: 1px solid var(--accent-cyan);
+  color: var(--text-primary); font-family: var(--font-mono); font-size: 10px;
+  padding: 6px 10px; border-radius: 3px;
+  pointer-events: none; opacity: 0;
+  transition: opacity .1s;
+  max-width: 180px; line-height: 1.6;
+  box-shadow: var(--glow-cyan);
+}
+
+/* WS connection */
+.ws-row { display: flex; gap: 4px; }
+.ws-input {
+  flex: 1; background: var(--bg-card); border: 1px solid var(--border-dim);
+  color: var(--text-primary); font-family: var(--font-mono); font-size: 9px;
+  padding: 3px 6px; border-radius: 2px;
+}
+.ws-input:focus { outline: none; border-color: var(--accent-cyan); }
+.ws-btn {
+  background: var(--bg-card); border: 1px solid var(--border-dim);
+  color: var(--text-secondary); font-family: var(--font-mono); font-size: 9px;
+  padding: 3px 8px; border-radius: 2px; cursor: pointer; transition: all .15s;
+}
+.ws-btn:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+.ws-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); margin-right: 4px; display: inline-block; }
+.ws-dot.live { background: var(--accent-green); box-shadow: var(--glow-green); }
+</style>
+</head>
+<body>
+
+<!-- TOP HEADER -->
+<header class="hmi-header">
+  <div class="header-brand">
+    <div class="brand-logo">
+      <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <polygon points="18,2 34,10 34,26 18,34 2,26 2,10" fill="none" stroke="#00d4ff" stroke-width="1.5" opacity=".6"/>
+        <polygon points="18,7 29,12.5 29,23.5 18,29 7,23.5 7,12.5" fill="none" stroke="#00ffc8" stroke-width="1" opacity=".4"/>
+        <circle cx="18" cy="18" r="5" fill="rgba(0,212,255,.2)" stroke="#00d4ff" stroke-width="1.5"/>
+        <circle cx="18" cy="18" r="2" fill="#00d4ff"/>
+      </svg>
+    </div>
+    <div class="brand-text">
+      <h1>SWaT — SCADA</h1>
+      <p>SECURE WATER TREATMENT SYSTEM ·  ITRUST DIGITAL TWIN</p>
+    </div>
+  </div>
+  <div class="header-status-bar">
+    <div class="sys-status">
+      <div class="status-dot" id="sys-dot"></div>
+      <span id="sys-lbl" style="font-size:10px;color:var(--text-secondary)">SYSTEM NORMAL</span>
+    </div>
+    <div class="alarm-badge" id="alarm-badge">⚠ ALARM</div>
+    <div>
+      <div class="header-clock" id="hdr-clock">--:--:--</div>
+      <div class="header-date" id="hdr-date">--/--/----</div>
+    </div>
+  </div>
+</header>
+
+<div class="hmi-layout">
+
+<!-- LEFT SIDEBAR -->
+<aside class="sidebar-left">
+  <div class="sidebar-section">
+    <div class="sidebar-title">CONNECTION</div>
+    <div class="ws-row" style="margin-bottom:4px">
+      <input class="ws-input" id="ws-url" value="ws://127.0.0.1:8765" placeholder="ws://host:port"/>
+      <button class="ws-btn" onclick="toggleWS()" id="ws-btn">CONNECT</button>
+    </div>
+    <div style="font-family:var(--font-mono);font-size:8px;color:var(--text-muted)">
+      <span class="ws-dot" id="ws-dot"></span>
+      <span id="ws-status">SIMULATION MODE</span>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-title">TANK LEVELS</div>
+    <div class="kpi-card" id="kpi-l1">
+      <div class="kpi-label">LIT-101 · RAW TANK</div>
+      <div class="kpi-value" id="kv-l1">500<span class="kpi-unit">L</span></div>
+      <div class="kpi-bar-track"><div class="kpi-bar-fill" id="kb-l1" style="width:50%"></div></div>
+    </div>
+    <div class="kpi-card" id="kpi-l3">
+      <div class="kpi-label">LIT-301 · UF FEED</div>
+      <div class="kpi-value" id="kv-l3">800<span class="kpi-unit">L</span></div>
+      <div class="kpi-bar-track"><div class="kpi-bar-fill" id="kb-l3" style="width:80%"></div></div>
+    </div>
+    <div class="kpi-card" id="kpi-l4">
+      <div class="kpi-label">LIT-401 · DECHLOR</div>
+      <div class="kpi-value" id="kv-l4">500<span class="kpi-unit">L</span></div>
+      <div class="kpi-bar-track"><div class="kpi-bar-fill" id="kb-l4" style="width:50%"></div></div>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-title">WATER QUALITY</div>
+    <div class="kpi-card ok" id="kpi-ph">
+      <div class="kpi-label">AIT-202 · pH</div>
+      <div class="kpi-value ok" id="kv-ph">7.20</div>
+      <div class="kpi-bar-track"><div class="kpi-bar-fill" id="kb-ph" style="width:60%;background:linear-gradient(90deg,var(--accent-green),var(--accent-teal))"></div></div>
+    </div>
+    <div class="kpi-card ok" id="kpi-cl">
+      <div class="kpi-label">CHLORINE RESIDUAL</div>
+      <div class="kpi-value ok" id="kv-cl">3.0<span class="kpi-unit">mg/L</span></div>
+      <div class="kpi-bar-track"><div class="kpi-bar-fill" id="kb-cl" style="width:40%;background:linear-gradient(90deg,var(--accent-green),var(--accent-teal))"></div></div>
+    </div>
+    <div class="kpi-card" id="kpi-tds">
+      <div class="kpi-label">TDS PERMEATE</div>
+      <div class="kpi-value" id="kv-tds">50<span class="kpi-unit">mg/L</span></div>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-title">PRESSURE / FLOW</div>
+    <div class="kpi-card" id="kpi-pit">
+      <div class="kpi-label">PIT-501 · RO FEED</div>
+      <div class="kpi-value" id="kv-pit">12.0<span class="kpi-unit">bar</span></div>
+      <div class="kpi-bar-track"><div class="kpi-bar-fill" id="kb-pit" style="width:60%"></div></div>
+    </div>
+    <div class="kpi-card" id="kpi-fit">
+      <div class="kpi-label">FIT-101 · INLET</div>
+      <div class="kpi-value" id="kv-fit">5.0<span class="kpi-unit">m³/h</span></div>
+    </div>
+    <div class="kpi-card" id="kpi-dpit">
+      <div class="kpi-label">DPIT-301 · TMP</div>
+      <div class="kpi-value" id="kv-dpit">25<span class="kpi-unit">kPa</span></div>
+      <div class="kpi-bar-track"><div class="kpi-bar-fill" id="kb-dpit" style="width:25%;background:linear-gradient(90deg,var(--accent-amber),#ff8c00)"></div></div>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-title">FOULING STATUS</div>
+    <div class="kpi-card ok" id="kpi-uf">
+      <div class="kpi-label">UF FOULING FACTOR</div>
+      <div class="kpi-value ok" id="kv-uf">0<span class="kpi-unit">%</span></div>
+      <div class="kpi-bar-track"><div class="kpi-bar-fill" id="kb-uf" style="width:0%;background:linear-gradient(90deg,var(--accent-green),#00b050)"></div></div>
+    </div>
+    <div class="kpi-card ok" id="kpi-ro">
+      <div class="kpi-label">RO FOULING FACTOR</div>
+      <div class="kpi-value ok" id="kv-ro">0<span class="kpi-unit">%</span></div>
+      <div class="kpi-bar-track"><div class="kpi-bar-fill" id="kb-ro" style="width:0%;background:linear-gradient(90deg,var(--accent-green),#00b050)"></div></div>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN PID -->
+<main class="pid-main">
+  <div class="pid-toolbar">
+    <span class="toolbar-label">VIEW:</span>
+    <button class="toolbar-btn active">P&amp;ID</button>
+    <button class="toolbar-btn">NETWORK</button>
+    <button class="toolbar-btn">ALARMS</button>
+    <div class="toolbar-sep"></div>
+    <span class="toolbar-label">SIM:</span>
+    <button class="toolbar-btn" id="pause-btn" onclick="togglePause()">⏸ PAUSE</button>
+    <button class="toolbar-btn" onclick="resetSim()">↺ RESET</button>
+    <div class="toolbar-sep"></div>
+    <button class="toolbar-btn attack-btn" onclick="injectAttack()">⚡ INJECT ATTACK</button>
+    <div class="toolbar-sep"></div>
+    <span id="attack-label" style="font-family:var(--font-mono);font-size:9px;color:var(--text-muted)">NO ATTACK ACTIVE</span>
+  </div>
+
+  <div class="pid-svg-wrap">
+    <svg id="pid-svg" class="pid-bg" viewBox="0 0 1080 460" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="glow-c"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <filter id="glow-r"><feGaussianBlur stdDeviation="4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <filter id="glow-g"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <marker id="arr-c" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 Z" fill="var(--accent-cyan)"/></marker>
+        <marker id="arr-t" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 Z" fill="var(--accent-teal)"/></marker>
+        <marker id="arr-g" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 Z" fill="var(--accent-green)"/></marker>
+        <clipPath id="tc1"><rect x="52" y="80" width="66" height="130"/></clipPath>
+        <clipPath id="tc3"><rect x="402" y="80" width="66" height="130"/></clipPath>
+        <clipPath id="tc4"><rect x="582" y="80" width="66" height="130"/></clipPath>
+        <clipPath id="ca"><rect x="185" y="160" width="50" height="90"/></clipPath>
+        <clipPath id="ccl"><rect x="245" y="165" width="40" height="80"/></clipPath>
+        <clipPath id="ccg"><rect x="297" y="170" width="34" height="74"/></clipPath>
+      </defs>
+
+      <!-- BACKGROUND GRID -->
+      <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+        <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(20,40,70,.3)" stroke-width=".5"/>
+      </pattern>
+      <rect width="1080" height="460" fill="url(#grid)" rx="4"/>
+
+      <!-- Stage background bands -->
+      <rect x="0" y="0" width="170" height="460" fill="rgba(0,212,255,.015)" rx="4"/>
+      <rect x="170" y="0" width="200" height="460" fill="rgba(41,121,255,.012)"/>
+      <rect x="370" y="0" width="200" height="460" fill="rgba(0,255,200,.012)"/>
+      <rect x="570" y="0" width="175" height="460" fill="rgba(213,0,249,.012)"/>
+      <rect x="745" y="0" width="200" height="460" fill="rgba(41,121,255,.015)"/>
+      <rect x="945" y="0" width="135" height="460" fill="rgba(0,230,118,.012)" rx="4"/>
+
+      <!-- Stage dividers -->
+      <line x1="170" y1="0" x2="170" y2="460" class="stage-divider" stroke="#1a2a40"/>
+      <line x1="370" y1="0" x2="370" y2="460" class="stage-divider" stroke="#1a2a40"/>
+      <line x1="570" y1="0" x2="570" y2="460" class="stage-divider" stroke="#1a2a40"/>
+      <line x1="745" y1="0" x2="745" y2="460" class="stage-divider" stroke="#1a2a40"/>
+      <line x1="945" y1="0" x2="945" y2="460" class="stage-divider" stroke="#1a2a40"/>
+
+      <!-- Stage labels -->
+      <text class="stage-label" x="85" y="16">STAGE 1</text>
+      <text style="font-family:'Share Tech Mono',monospace;font-size:7px;fill:#1a3a5a;text-anchor:middle" x="85" y="26">RAW WATER INTAKE</text>
+      <text class="stage-label" x="270" y="16">STAGE 2</text>
+      <text style="font-family:'Share Tech Mono',monospace;font-size:7px;fill:#1a3a5a;text-anchor:middle" x="270" y="26">CHEMICAL DOSING</text>
+      <text class="stage-label" x="470" y="16">STAGE 3</text>
+      <text style="font-family:'Share Tech Mono',monospace;font-size:7px;fill:#1a3a5a;text-anchor:middle" x="470" y="26">ULTRAFILTRATION</text>
+      <text class="stage-label" x="657" y="16">STAGE 4</text>
+      <text style="font-family:'Share Tech Mono',monospace;font-size:7px;fill:#1a3a5a;text-anchor:middle" x="657" y="26">UV / DECHLORINATION</text>
+      <text class="stage-label" x="845" y="16">STAGE 5</text>
+      <text style="font-family:'Share Tech Mono',monospace;font-size:7px;fill:#1a3a5a;text-anchor:middle" x="845" y="26">REVERSE OSMOSIS</text>
+      <text class="stage-label" x="1012" y="16">STAGE 6</text>
+      <text style="font-family:'Share Tech Mono',monospace;font-size:7px;fill:#1a3a5a;text-anchor:middle" x="1012" y="26">DISTRIBUTION</text>
+
+      <!-- ══ STAGE 1 ══ -->
+      <!-- Inlet drop from top -->
+      <line id="p-inlet" class="pipe flow-active" x1="85" y1="35" x2="85" y2="78" stroke="var(--accent-cyan)" stroke-width="3"/>
+      <!-- MV-101 Gate Valve -->
+      <g id="grp-mv101" data-tip="MV-101 ▸ Motorised Inlet Valve" style="cursor:help">
+        <rect id="mv101-body" x="79" y="40" width="12" height="14" rx="2" class="valve-open" filter="url(#glow-g)"/>
+        <polygon id="mv101-sym" points="80,41 85,48 80,55" style="fill:var(--accent-green);stroke:none"/>
+        <polygon points="90,41 85,48 90,55" style="fill:var(--accent-green);stroke:none"/>
+        <text class="tank-label" x="85" y="63" text-anchor="middle">MV-101</text>
+      </g>
+      <!-- Tank 1 -->
+      <rect x="51" y="78" width="68" height="132" rx="3" class="tank-bg"/>
+      <rect id="w1" x="52" y="152" width="66" height="57" clip-path="url(#tc1)" fill="rgba(0,100,200,.35)"/>
+      <rect x="51" y="78" width="68" height="132" rx="3" class="tank-shell" filter="url(#glow-c)"/>
+      <text class="tank-val" id="tv-l1" x="85" y="148" text-anchor="middle">500 L</text>
+      <text class="tank-label" x="85" y="220" text-anchor="middle">T-101 RAW</text>
+      <!-- FIT-101 sensor -->
+      <circle class="sensor-ok" id="d-fit101" cx="85" cy="68" r="5" filter="url(#glow-g)" data-tip="FIT-101 ▸ Inlet Flow Meter"/>
+      <circle class="sensor-ring sensor-ring-ok" cx="85" cy="68" r="8" opacity=".5"/>
+      <text class="sensor-text" fill="var(--accent-teal)" x="95" y="71" font-size="7">FIT-101</text>
+      <text id="tv-fit101" style="font-family:'Share Tech Mono',monospace;font-size:8px;fill:var(--accent-teal)" x="95" y="80">5.0 m³/h</text>
+      <!-- P101 pump -->
+      <g id="grp-p101" data-tip="P-101 ▸ Main Feed Pump" style="cursor:help">
+        <circle id="pb-p101" cx="72" cy="240" r="14" class="pump-on"/>
+        <polygon id="pa-p101" points="65,236 65,244 80,240" class="pump-arrow-on"/>
+        <text class="pump-label-t" x="72" y="260" text-anchor="middle">P-101</text>
+      </g>
+      <g id="grp-p102" data-tip="P-102 ▸ Booster Feed Pump" style="cursor:help">
+        <circle id="pb-p102" cx="110" cy="240" r="11" class="pump-off"/>
+        <polygon id="pa-p102" points="104,237 104,243 116,240" class="pump-arrow-off"/>
+        <text class="pump-label-t" x="110" y="256" text-anchor="middle">P-102</text>
+      </g>
+      <!-- Stage 1 outlet -->
+      <path id="p-s1out" class="pipe flow-active" d="M120 148 L160 148" stroke="var(--accent-cyan)" stroke-width="3" marker-end="url(#arr-c)"/>
+
+      <!-- ══ STAGE 2 ══ -->
+      <!-- pH sensor -->
+      <polygon id="d-ph" points="162,132 167,140 162,148 157,140" class="sensor-ok" filter="url(#glow-g)" data-tip="AIT-202 ▸ pH Analyser"/>
+      <text id="tv-ph2" style="font-family:'Share Tech Mono',monospace;font-size:8px;fill:var(--accent-green)" x="170" y="143">pH 7.20</text>
+      <!-- Turbidity -->
+      <circle id="d-turb" cx="163" cy="160" r="4" class="sensor-ok" data-tip="AIT-201 ▸ Turbidity (NTU)"/>
+      <text id="tv-turb" style="font-family:'Share Tech Mono',monospace;font-size:7px;fill:#5080cc" x="170" y="163">450 NTU</text>
+      <!-- MV-201 -->
+      <g id="grp-mv201" data-tip="MV-201 ▸ Stage-2 Feed Valve" style="cursor:help">
+        <rect id="mv201-body" x="163" y="140" width="12" height="14" rx="2" class="valve-open"/>
+        <polygon points="164,141 169,148 164,155" style="fill:var(--accent-green);stroke:none"/>
+        <polygon points="174,141 169,148 174,155" style="fill:var(--accent-green);stroke:none"/>
+      </g>
+      <path id="p-s12" class="pipe flow-active" d="M176 148 L183 148 L183 175" stroke="var(--accent-cyan)" stroke-width="2.5" marker-end="url(#arr-c)"/>
+
+      <!-- ACID TANK -->
+      <rect x="183" y="158" width="52" height="93" rx="3" fill="#0a1408" stroke="#2d5a1a" stroke-width="1"/>
+      <rect id="w-acid" x="184" y="210" width="50" height="40" clip-path="url(#ca)" fill="rgba(200,150,0,.4)"/>
+      <rect x="183" y="158" width="52" height="93" rx="3" fill="none" stroke="#3d7a22" stroke-width=".5"/>
+      <text style="font-family:'Share Tech Mono',monospace;font-size:8px;fill:#80a060;text-anchor:middle" x="209" y="210" id="tv-acid">75%</text>
+      <text style="font-family:'Share Tech Mono',monospace;font-size:7px;fill:#3d5a30;text-anchor:middle" x="209" y="258">HCl</text>
+      <g id="grp-p203" data-tip="P-203 ▸ Acid Dosing Pump" style="cursor:help">
+        <circle id="pb-p203" cx="209" cy="272" r="11" class="pump-on"/>
+        <polygon id="pa-p203" points="203,268 203,276 215,272" class="pump-arrow-on"/>
+        <text class="pump-label-t" x="209" y="288" text-anchor="middle">P-203</text>
+      </g>
+
+      <!-- CHLORINE TANK -->
+      <rect x="246" y="163" width="40" height="80" rx="3" fill="#040d14" stroke="#1a3a5a" stroke-width="1"/>
+      <rect id="w-cl" x="247" y="203" width="38" height="39" clip-path="url(#ccl)" fill="rgba(0,150,100,.4)"/>
+      <rect x="246" y="163" width="40" height="80" rx="3" fill="none" stroke="#204060" stroke-width=".5"/>
+      <text style="font-family:'Share Tech Mono',monospace;font-size:7px;fill:#406080;text-anchor:middle" x="266" y="198" id="tv-cl2">80%</text>
+      <text style="font-family:'Share Tech Mono',monospace;font-size:6px;fill:#203040;text-anchor:middle" x="266" y="250">NaOCl</text>
+      <g id="grp-p205" data-tip="P-205 ▸ Chlorine Dosing Pump" style="cursor:help">
+        <circle id="pb-p205" cx="266" cy="262" r="10" class="pump-on"/>
+        <polygon id="pa-p205" points="261,258 261,266 272,262" class="pump-arrow-on"/>
+        <text class="pump-label-t" x="266" y="277" text-anchor="middle">P-205</text>
+      </g>
+
+      <!-- COAGULANT TANK -->
+      <rect x="297" y="168" width="36" height="74" rx="3" fill="#0d0820" stroke="#3a1a5a" stroke-width="1"/>
+      <rect id="w-coag" x="298" y="202" width="34" height="39" clip-path="url(#ccg)" fill="rgba(100,0,200,.35)"/>
+      <rect x="297" y="168" width="36" height="74" rx="3" fill="none" stroke="#4a2a70" stroke-width=".5"/>
+      <text style="font-family:'Share Tech Mono',monospace;font-size:7px;fill:#503060;text-anchor:middle" x="315" y="200" id="tv-coag">80%</text>
+      <text style="font-family:'Share Tech Mono',monospace;font-size:6px;fill:#2a1a40;text-anchor:middle" x="315" y="249">Coag</text>
+      <g id="grp-p206" data-tip="P-206 ▸ Coagulant Dosing Pump" style="cursor:help">
+        <circle id="pb-p206" cx="315" cy="262" r="9" class="pump-off"/>
+        <polygon id="pa-p206" points="311,258 311,266 320,262" class="pump-arrow-off"/>
+        <text class="pump-label-t" x="315" y="276" text-anchor="middle">P-206</text>
+      </g>
+
+      <!-- S2→S3 pipe -->
+      <path id="p-s23" class="pipe flow-active" d="M183 175 L348 175 L348 148 L365 148" stroke="var(--accent-cyan)" stroke-width="2.5" marker-end="url(#arr-c)"/>
+
+      <!-- pH interlock alarm -->
+      <g id="alm-ph" opacity="0">
+        <rect x="155" y="168" width="110" height="14" rx="2" class="alarm-banner"/>
+        <text class="alarm-text" x="210" y="178">⚠ pH INTERLOCK</text>
+      </g>
+
+      <!-- ══ STAGE 3 ══ -->
+      <!-- MV-301 -->
+      <g id="grp-mv301" data-tip="MV-301 ▸ UF Permeate Valve" style="cursor:help">
+        <rect id="mv301-body" x="366" y="141" width="12" height="14" rx="2" class="valve-open"/>
+        <polygon points="367,142 372,148 367,155" style="fill:var(--accent-green);stroke:none"/>
+        <polygon points="377,142 372,148 377,155" style="fill:var(--accent-green);stroke:none"/>
+      </g>
+      <path id="p-s3in" class="pipe flow-active" d="M379 148 L379 80 L400 80" stroke="var(--accent-cyan)" stroke-width="2.5" marker-end="url(#arr-c)"/>
+      <!-- UF Tank -->
+      <rect x="400" y="78" width="68" height="132" rx="3" fill="#030e0a"/>
+      <rect id="w3" x="402" y="122" width="66" height="87" clip-path="url(#tc3)" fill="rgba(0,180,130,.35)"/>
+      <rect x="400" y="78" width="68" height="132" rx="3" class="tank-shell" stroke="var(--accent-teal)" filter="url(#glow-c)"/>
+      <!-- UF Membrane -->
+      <rect x="406" y="85" width="56" height="10" rx="2" class="membrane-shell"/>
+      <text class="membrane-label" x="434" y="93" font-size="6.5">UF MEMBRANE</text>
+      <text class="tank-val" id="tv-l3" x="434" y="142" text-anchor="middle">800 L</text>
+      <text class="tank-label" x="434" y="220" text-anchor="middle">T-301 UF</text>
+      <!-- DPIT-301 -->
+      <polygon id="d-dpit" points="468,105 473,113 468,121 463,113" class="sensor-ok" data-tip="DPIT-301 ▸ Trans-Membrane Pressure"/>
+      <text id="tv-dpit-r" style="font-family:'Share Tech Mono',monospace;font-size:7px;fill:var(--accent-teal)" x="476" y="115">25 kPa</text>
+      <!-- UF Fouling bar -->
+      <rect x="402" y="302" width="64" height="6" rx="2" fill="#0a1628" stroke="var(--border-dim)" stroke-width=".5"/>
+      <rect id="uf-bar" x="402" y="302" width="0" height="6" rx="2" fill="var(--accent-green)"/>
+      <text class="tank-label" x="434" y="316" text-anchor="middle">UF FOULING</text>
+      <!-- BW Valves -->
+      <g id="grp-mv303" data-tip="MV-303 ▸ Backwash Inlet (normally closed)" style="cursor:help">
+        <rect id="mv303-body" x="387" y="260" width="12" height="12" rx="2" class="valve-closed"/>
+        <polygon id="mv303-sym" points="388,261 393,266 388,272" style="fill:#1a3050;stroke:none"/>
+        <polygon points="398,261 393,266 398,272" style="fill:#1a3050;stroke:none"/>
+        <text class="pump-label-t" x="393" y="281" text-anchor="middle">BW-IN</text>
+      </g>
+      <g id="grp-mv304" data-tip="MV-304 ▸ Backwash Outlet (normally closed)" style="cursor:help">
+        <rect id="mv304-body" x="453" y="260" width="12" height="12" rx="2" class="valve-closed"/>
+        <polygon id="mv304-sym" points="454,261 459,266 454,272" style="fill:#1a3050;stroke:none"/>
+        <polygon points="464,261 459,266 464,272" style="fill:#1a3050;stroke:none"/>
+        <text class="pump-label-t" x="459" y="281" text-anchor="middle">BW-OUT</text>
+      </g>
+      <!-- P301 pump -->
+      <g id="grp-p301" data-tip="P-301 ▸ UF Feed Pump" style="cursor:help">
+        <circle id="pb-p301" cx="416" cy="240" r="14" class="pump-on"/>
+        <polygon id="pa-p301" points="409,236 409,244 424,240" class="pump-arrow-on"/>
+        <text class="pump-label-t" x="416" y="260" text-anchor="middle">P-301</text>
+      </g>
+      <!-- P602 BW pump -->
+      <g id="grp-p602" data-tip="P-602 ▸ Backwash Pump" style="cursor:help">
+        <circle id="pb-p602" cx="453" cy="240" r="11" class="pump-off"/>
+        <polygon id="pa-p602" points="448,237 448,243 459,240" class="pump-arrow-off"/>
+        <text class="pump-label-t" x="453" y="256" text-anchor="middle">P-602</text>
+      </g>
+      <!-- Backwash alarm -->
+      <g id="alm-bw" opacity="0">
+        <rect x="378" y="285" width="112" height="14" rx="2" class="alarm-banner"/>
+        <text class="alarm-text" x="434" y="295">⚠ BACKWASH ACTIVE</text>
+      </g>
+      <!-- Pipe to S4 -->
+      <path id="p-s34" class="pipe flow-active" d="M468 148 L555 148 L555 108 L572 108" stroke="var(--accent-teal)" stroke-width="2.5" marker-end="url(#arr-t)"/>
+
+      <!-- ══ STAGE 4 ══ -->
+      <!-- UV unit -->
+      <ellipse id="uv401" cx="578" cy="68" rx="14" ry="14" class="uv-glow uv-active" data-tip="UV-401 ▸ UV Disinfection Unit"/>
+      <text style="font-family:'Orbitron',monospace;font-size:7px;fill:var(--accent-purple);text-anchor:middle;font-weight:700" x="578" y="72">UV</text>
+      <!-- P-403 bisulfate -->
+      <g id="grp-p403" data-tip="P-403 ▸ Bisulfate Dosing Pump (pre-RO dechlorination)" style="cursor:help">
+        <circle id="pb-p403" cx="550" cy="120" r="10" class="pump-on"/>
+        <polygon id="pa-p403" points="545,116 545,124 556,120" class="pump-arrow-on"/>
+        <text class="pump-label-t" x="550" y="135" text-anchor="middle">P-403</text>
+        <line class="pipe" x1="550" y1="110" x2="550" y2="108" stroke="var(--accent-purple)" stroke-width="1.5"/>
+      </g>
+      <!-- Bisulfate tank mini -->
+      <rect x="537" y="145" width="26" height="32" rx="2" fill="#0d0820" stroke="#3a1a5a" stroke-width="1"/>
+      <text style="font-family:'Share Tech Mono',monospace;font-size:6px;fill:#503060;text-anchor:middle" x="550" y="164">BSO₄</text>
+      <!-- Pipe into DC tank -->
+      <path id="p-s4in" class="pipe flow-active" d="M572 108 L572 80 L580 80" stroke="var(--accent-teal)" stroke-width="2.5" marker-end="url(#arr-t)"/>
+      <!-- DC Tank -->
+      <rect x="580" y="78" width="68" height="132" rx="3" fill="#030a0e"/>
+      <rect id="w4" x="582" y="124" width="66" height="85" clip-path="url(#tc4)" fill="rgba(0,180,130,.35)"/>
+      <rect x="580" y="78" width="68" height="132" rx="3" class="tank-shell" stroke="var(--accent-teal)" filter="url(#glow-c)"/>
+      <text class="tank-val" id="tv-l4" x="614" y="142" text-anchor="middle">500 L</text>
+      <text class="tank-label" x="614" y="220" text-anchor="middle">T-401 DC</text>
+      <!-- AIT-402 ORP -->
+      <circle id="d-orp" cx="578" cy="130" r="4" class="sensor-ok" data-tip="AIT-402 ▸ ORP Post-dechlorination"/>
+      <text id="tv-orp" style="font-family:'Share Tech Mono',monospace;font-size:7px;fill:var(--accent-green);text-anchor:end" x="574" y="133">200mV</text>
+      <!-- P401 pump -->
+      <g id="grp-p401" data-tip="P-401 ▸ Dechlorination Transfer Pump" style="cursor:help">
+        <circle id="pb-p401" cx="614" cy="240" r="14" class="pump-on"/>
+        <polygon id="pa-p401" points="607,236 607,244 622,240" class="pump-arrow-on"/>
+        <text class="pump-label-t" x="614" y="260" text-anchor="middle">P-401</text>
+      </g>
+      <!-- Pipe to S5 -->
+      <path id="p-s45" class="pipe flow-active" d="M648 148 L730 148" stroke="var(--accent-teal)" stroke-width="2.5" marker-end="url(#arr-t)"/>
+
+      <!-- ══ STAGE 5 ══ -->
+      <!-- PIT-501 pressure sensor -->
+      <polygon id="d-pit501" points="730,133 736,142 730,151 724,142" class="sensor-ok" data-tip="PIT-501 ▸ RO Feed Pressure (bar)"/>
+      <text id="tv-pit-r" style="font-family:'Share Tech Mono',monospace;font-size:7px;fill:var(--accent-blue);text-anchor:end" x="720" y="144">12.0bar</text>
+      <!-- P501 HP pump -->
+      <g id="grp-p501" data-tip="P-501 ▸ RO High-Pressure Pump" style="cursor:help">
+        <circle id="pb-p501" cx="744" cy="148" r="16" class="pump-on" filter="url(#glow-c)"/>
+        <polygon id="pa-p501" points="736,144 736,152 756,148" class="pump-arrow-on"/>
+        <text class="pump-label-t" x="744" y="170" text-anchor="middle">P-501</text>
+      </g>
+      <!-- Feed to RO -->
+      <path id="p-ro-in" class="pipe flow-active" d="M760 148 L768 148" stroke="var(--accent-teal)" stroke-width="2.5"/>
+      <!-- RO Membrane block -->
+      <rect x="768" y="100" width="118" height="96" rx="6" class="membrane-shell" filter="url(#glow-c)"/>
+      <text class="membrane-label" x="827" y="138" font-size="9" font-weight="bold" fill="var(--accent-blue)">RO MEMBRANE</text>
+      <text class="membrane-label" x="827" y="150" font-size="7">Semi-permeable Polyamide</text>
+      <text class="membrane-label" x="827" y="161" font-size="6.5" fill="#2a3a70">TFC Array</text>
+      <!-- Permeate flow (green) -->
+      <path id="p-perm" class="pipe flow-active" d="M768 115 L758 115 L758 178 L880 178 L880 208" stroke="var(--accent-green)" stroke-width="2" marker-end="url(#arr-g)"/>
+      <text style="font-family:'Share Tech Mono',monospace;font-size:7px;fill:var(--accent-green);text-anchor:middle" x="820" y="175">PERMEATE →</text>
+      <!-- Brine reject (dim red) -->
+      <path class="pipe pipe-dead" d="M886 148 L920 148" stroke="var(--accent-red)" stroke-width="2"/>
+      <line x1="920" y1="138" x2="920" y2="158" stroke="var(--accent-red)" stroke-width="2" opacity=".4"/>
+      <line x1="920" y1="141" x2="928" y2="141" stroke="var(--accent-red)" stroke-width="1.5" opacity=".3"/>
+      <line x1="920" y1="148" x2="926" y2="148" stroke="var(--accent-red)" stroke-width="1.5" opacity=".3"/>
+      <line x1="920" y1="155" x2="924" y2="155" stroke="var(--accent-red)" stroke-width="1.5" opacity=".3"/>
+      <text style="font-family:'Share Tech Mono',monospace;font-size:7px;fill:rgba(255,61,87,.5)" x="930" y="145">BRINE</text>
+      <text style="font-family:'Share Tech Mono',monospace;font-size:6px;fill:rgba(255,61,87,.3)" x="930" y="154">→ DRAIN</text>
+      <!-- TDS sensor -->
+      <circle id="d-tds" cx="880" cy="178" r="4" class="sensor-ok" data-tip="AIT-501 / TDS Permeate ▸ Salt rejection"/>
+      <text id="tv-tds-r" style="font-family:'Share Tech Mono',monospace;font-size:7px;fill:var(--accent-green)" x="887" y="181">50 mg/L</text>
+      <text id="tv-fit502" style="font-family:'Share Tech Mono',monospace;font-size:7px;fill:#406080" x="887" y="190">FIT-502: 4.0</text>
+      <!-- RO Fouling bar -->
+      <rect x="770" y="205" width="116" height="6" rx="2" fill="#0a1628" stroke="var(--border-dim)" stroke-width=".5"/>
+      <rect id="ro-bar" x="770" y="205" width="0" height="6" rx="2" fill="var(--accent-blue)"/>
+      <text class="tank-label" x="828" y="220" text-anchor="middle">RO FOULING FACTOR</text>
+      <!-- High pressure alarm -->
+      <g id="alm-hp" opacity="0">
+        <rect x="768" y="224" width="118" height="14" rx="2" class="alarm-banner"/>
+        <text class="alarm-text" x="827" y="234">⚠ HIGH PRESSURE</text>
+      </g>
+      <!-- RO CIP alarm -->
+      <g id="alm-ro" opacity="0">
+        <rect x="768" y="240" width="118" height="14" rx="2" fill="rgba(255,171,0,.1)" stroke="var(--accent-amber)" stroke-width="1" rx="2"/>
+        <text style="font-family:'Orbitron',monospace;font-size:7px;fill:var(--accent-amber);text-anchor:middle;animation:blink .5s infinite" x="827" y="250">⚠ RO CIP NEEDED</text>
+      </g>
+      <!-- Pipe to S6 -->
+      <path id="p-s56" class="pipe flow-active" d="M880 208 L880 232 L960 232 L960 200" stroke="var(--accent-green)" stroke-width="2.5" marker-end="url(#arr-g)"/>
+
+      <!-- ══ STAGE 6 ══ -->
+      <g id="grp-p601" data-tip="P-601 ▸ Distribution Pump A" style="cursor:help">
+        <circle id="pb-p601" cx="960" cy="186" r="12" class="pump-on"/>
+        <polygon id="pa-p601" points="954,182 954,190 966,186" class="pump-arrow-on"/>
+        <text class="pump-label-t" x="960" y="202" text-anchor="middle">P-601</text>
+      </g>
+      <g id="grp-p603" data-tip="P-603 ▸ Distribution Pump B" style="cursor:help">
+        <circle id="pb-p603" cx="990" cy="186" r="11" class="pump-off"/>
+        <polygon id="pa-p603" points="985,182 985,190 996,186" class="pump-arrow-off"/>
+        <text class="pump-label-t" x="990" y="202" text-anchor="middle">P-603</text>
+      </g>
+      <!-- Distribution header -->
+      <rect x="1000" y="158" width="68" height="56" rx="5" fill="rgba(0,230,118,.06)" stroke="var(--accent-green)" stroke-width="1" filter="url(#glow-g)"/>
+      <text style="font-family:'Orbitron',monospace;font-size:7.5px;fill:var(--accent-green);text-anchor:middle;font-weight:700" x="1034" y="180">DISTRIBUTION</text>
+      <text style="font-family:'Orbitron',monospace;font-size:7.5px;fill:var(--accent-green);text-anchor:middle;font-weight:700" x="1034" y="192">HEADER</text>
+      <!-- FIT-601 -->
+      <circle id="d-fit601" cx="998" cy="158" r="4" class="sensor-ok" data-tip="FIT-601 ▸ Distribution Flow"/>
+      <text id="tv-fit601" style="font-family:'Share Tech Mono',monospace;font-size:7px;fill:var(--accent-green);text-anchor:end" x="994" y="153">4.0 m³/h</text>
+      <path class="pipe flow-active" d="M972 186 L1000 186" stroke="var(--accent-green)" stroke-width="2.5"/>
+      <path class="pipe flow-active" d="M1068 186 L1074 186" stroke="var(--accent-green)" stroke-width="2" marker-end="url(#arr-g)"/>
+      <text style="font-family:'Share Tech Mono',monospace;font-size:7px;fill:rgba(0,230,118,.5)" x="1052" y="176">→ CONSUMER</text>
+
+      <!-- HIGH LEVEL ALARM OVERLAY -->
+      <g id="alm-lvl" opacity="0">
+        <rect x="40" y="60" width="108" height="14" rx="2" class="alarm-banner"/>
+        <text class="alarm-text" x="94" y="70">⚠ HIGH LEVEL</text>
+      </g>
+      <!-- CHEM LOW ALARM -->
+      <g id="alm-chem" opacity="0">
+        <rect x="178" y="290" width="110" height="14" rx="2" fill="rgba(255,171,0,.1)" stroke="var(--accent-amber)" stroke-width="1" rx="2"/>
+        <text style="font-family:'Orbitron',monospace;font-size:7px;fill:var(--accent-amber);text-anchor:middle" x="233" y="300">⚠ CHEM TANK LOW</text>
+      </g>
+    </svg>
+  </div>
+
+  <!-- BOTTOM SPARKLINE STRIP -->
+  <div class="bottom-strip">
+    <div class="spark-item">
+      <div class="spark-label">LIT-101 LEVEL (L)</div>
+      <canvas class="spark-canvas" id="sp-l1" width="130" height="32"></canvas>
+    </div>
+    <div class="strip-sep"></div>
+    <div class="spark-item">
+      <div class="spark-label">pH (AIT-202)</div>
+      <canvas class="spark-canvas" id="sp-ph" width="130" height="32"></canvas>
+    </div>
+    <div class="strip-sep"></div>
+    <div class="spark-item">
+      <div class="spark-label">DPIT-301 TMP (kPa)</div>
+      <canvas class="spark-canvas" id="sp-dpit" width="130" height="32"></canvas>
+    </div>
+    <div class="strip-sep"></div>
+    <div class="spark-item">
+      <div class="spark-label">PIT-501 PRESSURE (bar)</div>
+      <canvas class="spark-canvas" id="sp-pit" width="130" height="32"></canvas>
+    </div>
+    <div class="strip-sep"></div>
+    <div class="spark-item">
+      <div class="spark-label">FIT-101 INLET (m³/h)</div>
+      <canvas class="spark-canvas" id="sp-fit" width="130" height="32"></canvas>
+    </div>
+    <div class="strip-sep"></div>
+    <div class="spark-item">
+      <div class="spark-label">CHLORINE RESIDUAL (mg/L)</div>
+      <canvas class="spark-canvas" id="sp-cl" width="130" height="32"></canvas>
+    </div>
+  </div>
+</main>
+
+<!-- RIGHT SIDEBAR -->
+<aside class="sidebar-right">
+  <div class="sidebar-section">
+    <div class="sidebar-title">COIL / ACTUATOR STATES</div>
+    <div class="coil-grid" id="coil-grid"></div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-title">ATTACK INJECTION</div>
+    <div class="attack-selector" id="attack-selector">
+      <button class="atk-btn" onclick="setAttack('ph_manip')" id="atk-ph">pH MANIP</button>
+      <button class="atk-btn" onclick="setAttack('tank_overflow')" id="atk-tank">OVERFLOW</button>
+      <button class="atk-btn" onclick="setAttack('mem_damage')" id="atk-mem">MEMBRANE</button>
+      <button class="atk-btn" onclick="setAttack('chem_depl')" id="atk-chem">CHEM DEPL</button>
+      <button class="atk-btn" onclick="setAttack('valve_manip')" id="atk-valve">VALVE MANIP</button>
+      <button class="atk-btn" onclick="setAttack('dos')" id="atk-dos">DoS/RECON</button>
+    </div>
+    <button class="toolbar-btn attack-btn" style="width:100%;margin-bottom:4px" onclick="injectAttack()">▶ INJECT SELECTED</button>
+    <button class="toolbar-btn" style="width:100%" onclick="stopAttack()">■ STOP ATTACK</button>
+  </div>
+
+  <div class="sidebar-section" style="font-family:var(--font-mono);font-size:8px;color:var(--text-muted);line-height:1.8">
+    <div class="sidebar-title">ST ALARM THRESHOLDS</div>
+    <div>HIGH LEVEL : LIT_x &gt; 950 L</div>
+    <div>pH INTERLOCK : AIT_202 &gt;900 or &lt;550</div>
+    <div>UF BACKWASH : DPIT&gt;600 or BW&gt;18000</div>
+    <div>HIGH PRESS : PIT_501&gt;1800 or PIT_502&gt;30</div>
+    <div>RO CIP : Fouling&gt;80% or last_clean&gt;1000</div>
+    <div>CHEM LOW : any tank &lt;15%</div>
+  </div>
+
+  <div class="sidebar-section" style="padding:6px 10px 4px">
+    <div class="sidebar-title">EVENT LOG</div>
+  </div>
+  <div class="event-log" id="event-log"></div>
+</aside>
+</div>
+
+<div class="hmi-tooltip" id="tooltip"></div>
+
+<script>
+// ═══════════════════════════════════ STATE ═══════════════════════════════════
+const S = {
+  LIT_101:500, LIT_301:800, LIT_401:500,
+  FIT_101:0, FIT_201:0, FIT_301:0, FIT_401:0, FIT_501:0, FIT_502:0, FIT_601:0,
+  AIT_201:450, AIT_202:720, AIT_203:410, AIT_401:30, AIT_402:200,
+  DPIT_301:250, PIT_501:1200, PIT_502:50, PIT_503:1100,
+  Acid_Tank_Level:75, Chlorine_Tank_Level:80, Coagulant_Tank_Level:80, Bisulfate_Tank_Level:85,
+  Chlorine_Residual:30, TDS_Feed:5000, TDS_Permeate:50,
+  UF_Fouling_Factor:0, UF_Runtime:0, UF_Last_Backwash:0, Turbidity_UF:0,
+  RO_Fouling_Factor:0, RO_Runtime:0, RO_Last_Cleaning:0,
+  Water_Temperature:250, Ambient_Temperature:250,
+  Energy_P101:0, Energy_P301:0, Energy_P501:0, Energy_Total:0, Turbidity_Raw:1500,
+  P_101:true, P_102:false, P_203:true, P_205:true, P_206:false,
+  P_301:true, P_401:true, P_403:false, P_501:true,
+  P_601:true, P_602:false, P_603:true, UV_401:true,
+  MV_101:1, MV_201:1, MV_301:1, MV_302:1, MV_303:0, MV_304:0,
+  UF_Backwash_Active:false, RO_Cleaning_Active:false,
+  Chemical_Low_Alarm:false, High_Fouling_Alarm:false,
+  High_Level_Alarm:false, High_Pressure_Alarm:false, System_Run:true
+};
+
+const H = { LIT_101:[], AIT_202:[], DPIT_301:[], PIT_501:[], FIT_101:[], Chlorine_Residual:[] };
+let paused=false, tick=0, ws=null;
+let attackType=null, attackActive=false, attackTimer=0;
+const prevAlm = {};
+
+// ═══════════════════════════════════ PHYSICS SIM ═══════════════════════════════════
+function simTick() {
+  if(paused || (ws && ws.readyState===1)) return;
+  const dt=0.1;
+  tick++;
+  const ns = (tick*37+13)%23;
+
+  // Stage 1
+  const Q_in = S.MV_101>0 ? (5+ns%2)/3600*1000 : 1/3600*1000;
+  let Q_out = 1/3600*1000;
+  if(S.P_101||S.P_102){
+    let b=4+((S.LIT_101>400)?1:0)+((S.LIT_101>600)?1:0);
+    if(S.P_102) b+=2;
+    Q_out=b/3600*1000;
+  }
+  S.LIT_101 = clamp(S.LIT_101+(Q_in-Q_out)*dt,0,1000);
+  S.FIT_101 = +(Q_in*3600/1000).toFixed(1);
+  S.FIT_201 = +(Q_out*3600/1000).toFixed(1);
+
+  // Stage 2 pH
+  const pHt = S.P_203 ? 6.80 : 8.50;
+  const pHraw = pHt+(S.AIT_202/100-pHt)*Math.exp(-dt/40)+(ns%3-1)*0.01;
+  S.AIT_202 = Math.round(clamp(pHraw,5.5,9.0)*100);
+  if(S.P_203) S.Acid_Tank_Level=Math.max(0,S.Acid_Tank_Level-0.05*dt);
+  if(S.P_205){S.Chlorine_Residual=Math.min(80,S.Chlorine_Residual+3*dt);S.Chlorine_Tank_Level=Math.max(0,S.Chlorine_Tank_Level-dt);}
+  else S.Chlorine_Residual=Math.max(10,S.Chlorine_Residual-1*dt);
+  if(S.P_206) S.Coagulant_Tank_Level=Math.max(0,S.Coagulant_Tank_Level-dt);
+  if(S.P_403) S.Bisulfate_Tank_Level=Math.max(0,S.Bisulfate_Tank_Level-dt);
+
+  // ST S1 control
+  S.MV_101 = S.LIT_101<450?1:(S.LIT_101>850?0:S.MV_101);
+  S.P_101 = S.LIT_101>200 && S.LIT_301<800;
+  S.P_102 = S.P_101 && S.LIT_101>600;
+  if(S.LIT_101<50){S.P_101=false;S.P_102=false;}
+  S.MV_201=(S.P_101||S.P_102)?1:0;
+
+  // ST S2 control
+  if(S.P_101||S.P_102){
+    if(S.AIT_202>750)S.P_203=true; else if(S.AIT_202<680)S.P_203=false;
+    if(S.Chlorine_Residual<20)S.P_205=true; else if(S.Chlorine_Residual>50)S.P_205=false;
+    if(S.AIT_201>400)S.P_206=true; else if(S.AIT_201<200)S.P_206=false;
+  } else {S.P_203=S.P_205=S.P_206=false;}
+  S.Chemical_Low_Alarm=S.Acid_Tank_Level<15||S.Chlorine_Tank_Level<15||S.Coagulant_Tank_Level<15||S.Bisulfate_Tank_Level<15;
+  if(S.AIT_202>900||S.AIT_202<550){S.P_101=S.P_102=S.P_301=S.P_401=false;}
+
+  // Stage 3 UF
+  if(S.P_301&&!S.UF_Backwash_Active){
+    S.UF_Runtime=Math.min(30000,S.UF_Runtime+1);S.UF_Last_Backwash=Math.min(30000,S.UF_Last_Backwash+1);
+    S.UF_Fouling_Factor=Math.min(100,S.UF_Fouling_Factor+0.001*(1+S.AIT_201/1000)*dt*100);
+    S.DPIT_301=Math.round((25+S.UF_Fouling_Factor)*10);
+    S.FIT_301=Math.max(2,5-(S.UF_Fouling_Factor/100)*3);
+  }
+  S.LIT_301=clamp(S.LIT_301+(S.FIT_201/36-S.FIT_301/360)*dt,0,1000);
+  S.MV_301=S.MV_302=(S.LIT_301>200&&S.LIT_401<800)?1:0;
+  S.P_301=S.LIT_301>200&&S.LIT_401<800;
+  if(S.DPIT_301>600||S.UF_Last_Backwash>18000){
+    S.UF_Backwash_Active=true;S.P_301=false;S.P_602=true;S.MV_303=S.MV_304=1;S.High_Fouling_Alarm=true;
+    S.UF_Fouling_Factor=Math.max(0,S.UF_Fouling_Factor-10*dt);S.DPIT_301=Math.max(100,S.DPIT_301-50);
+    if(S.UF_Fouling_Factor<1){S.UF_Last_Backwash=0;S.UF_Backwash_Active=S.P_602=false;S.MV_303=S.MV_304=0;}
+  } else {S.UF_Backwash_Active=S.P_602=false;S.MV_303=S.MV_304=0;S.High_Fouling_Alarm=false;}
+
+  // Stage 4
+  S.P_401=S.UV_401=(S.LIT_401>200);
+  S.P_403=S.P_401&&S.Chlorine_Residual>20;
+  const Qdc=S.P_401?(S.LIT_401>700?60:S.LIT_401>500?50:40):10;
+  S.FIT_401=Qdc;S.LIT_401=clamp(S.LIT_401+(S.FIT_301/360-Qdc/360)*dt,0,1000);
+  S.AIT_402=200+ns*8;
+
+  // Stage 5
+  S.P_501=S.P_401&&S.LIT_401>200;
+  if(S.P_501){
+    S.RO_Fouling_Factor=Math.min(100,S.RO_Fouling_Factor+0.05*dt);
+    S.PIT_501=Math.round((120+S.RO_Fouling_Factor*0.8)*10);
+    S.PIT_502=50+ns%20;S.FIT_502=Math.max(20,40-S.RO_Fouling_Factor*0.2);
+    S.TDS_Permeate=Math.round(S.TDS_Feed*15/1000);
+  }
+  if(S.RO_Fouling_Factor>80||S.RO_Last_Cleaning>1000){
+    S.RO_Cleaning_Active=true;S.P_501=false;S.High_Fouling_Alarm=true;
+    S.RO_Fouling_Factor=Math.max(0,S.RO_Fouling_Factor-5*dt);
+    if(S.RO_Fouling_Factor<2){S.RO_Last_Cleaning=0;S.RO_Cleaning_Active=false;}
+  } else S.RO_Cleaning_Active=false;
+  S.P_601=S.P_603=S.P_501;
+  S.FIT_601=S.P_603?Math.round(S.FIT_502+ns%2):10;
+  S.High_Level_Alarm=S.LIT_101>950||S.LIT_301>950||S.LIT_401>950;
+  S.High_Pressure_Alarm=S.PIT_501>1800||S.PIT_502>30;
+  S.System_Run=!S.High_Pressure_Alarm&&!S.High_Level_Alarm;
+
+  // Attack injection
+  if(attackActive){
+    attackTimer-=dt;
+    switch(attackType){
+      case 'ph_manip': S.AIT_202=Math.max(500,S.AIT_202-3); S.P_203=false; break;
+      case 'tank_overflow': S.LIT_101=Math.min(990,S.LIT_101+1.5); S.P_101=S.P_102=false; break;
+      case 'mem_damage': S.UF_Fouling_Factor=Math.min(100,S.UF_Fouling_Factor+0.5); S.UF_Backwash_Active=false; break;
+      case 'chem_depl': S.P_203=S.P_205=S.P_206=S.P_403=true; break;
+      case 'valve_manip': S.MV_101=S.MV_301=S.MV_302=0; break;
+      case 'dos': /* network only */ break;
+    }
+    if(attackTimer<=0){attackActive=false;logEv('Attack sequence ended','ok');}
+  }
+
+  pushHistory();
+}
+
+function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
+function pushHistory(){
+  const p=(arr,v)=>{arr.push(v);if(arr.length>80)arr.shift();};
+  p(H.LIT_101,S.LIT_101);p(H.AIT_202,S.AIT_202/100);
+  p(H.DPIT_301,S.DPIT_301/10);p(H.PIT_501,S.PIT_501/10);
+  p(H.FIT_101,S.FIT_101);p(H.Chlorine_Residual,S.Chlorine_Residual/10);
+}
+
+// ═══════════════════════════════════ DOM UPDATE ═══════════════════════════════════
+function updateDOM(){
+  const pH=S.AIT_202/100;
+  // Clock
+  const now=new Date();
+  document.getElementById('hdr-clock').textContent=now.toTimeString().slice(0,8);
+  document.getElementById('hdr-date').textContent=now.toDateString();
+
+  // KPI updates
+  const l1c=S.LIT_101>950?'alarm':S.LIT_101<100?'warn':'';
+  setKpi('kpi-l1','kv-l1',`${S.LIT_101.toFixed(0)}<span class="kpi-unit">L</span>`,l1c,S.LIT_101/10,'kb-l1');
+  setKpi('kpi-l3','kv-l3',`${S.LIT_301.toFixed(0)}<span class="kpi-unit">L</span>`,'','kb-l3',S.LIT_301/10);
+  setKpi('kpi-l4','kv-l4',`${S.LIT_401.toFixed(0)}<span class="kpi-unit">L</span>`,'','kb-l4',S.LIT_401/10);
+  const phc=pH<6||pH>9?'alarm':pH<6.5||pH>8.5?'warn':'ok';
+  setKpi('kpi-ph','kv-ph',pH.toFixed(2),phc,'kb-ph',(pH-5.5)*20);
+  const clc=(S.Chlorine_Residual/10)<1?'alarm':(S.Chlorine_Residual/10)<2?'warn':'ok';
+  setKpi('kpi-cl','kv-cl',`${(S.Chlorine_Residual/10).toFixed(1)}<span class="kpi-unit">mg/L</span>`,clc,'kb-cl',S.Chlorine_Residual/8);
+  setKpi('kpi-tds','kv-tds',`${S.TDS_Permeate}<span class="kpi-unit">mg/L</span>`,S.TDS_Permeate>200?'warn':'','kb-tds',S.TDS_Permeate/5);
+  const pitc=S.PIT_501>1800?'alarm':S.PIT_501>1500?'warn':'';
+  setKpi('kpi-pit','kv-pit',`${(S.PIT_501/10).toFixed(1)}<span class="kpi-unit">bar</span>`,pitc,'kb-pit',S.PIT_501/25);
+  setKpi('kpi-fit','kv-fit',`${S.FIT_101.toFixed(1)}<span class="kpi-unit">m³/h</span>`,'','','');
+  const dpitc=S.DPIT_301>600?'alarm':S.DPIT_301>400?'warn':'';
+  setKpi('kpi-dpit','kv-dpit',`${(S.DPIT_301/10).toFixed(0)}<span class="kpi-unit">kPa</span>`,dpitc,'kb-dpit',S.DPIT_301/12);
+  const ufc=S.UF_Fouling_Factor>70?'alarm':S.UF_Fouling_Factor>40?'warn':'ok';
+  setKpi('kpi-uf','kv-uf',`${S.UF_Fouling_Factor.toFixed(0)}<span class="kpi-unit">%</span>`,ufc,'kb-uf',S.UF_Fouling_Factor);
+  const roc=S.RO_Fouling_Factor>70?'alarm':S.RO_Fouling_Factor>40?'warn':'ok';
+  setKpi('kpi-ro','kv-ro',`${S.RO_Fouling_Factor.toFixed(0)}<span class="kpi-unit">%</span>`,roc,'kb-ro',S.RO_Fouling_Factor);
+
+  // PID tank levels
+  tankLvl('w1',S.LIT_101/1000,57,80,210); tankLvl('w3',S.LIT_301/1000,87,80,210); tankLvl('w4',S.LIT_401/1000,85,80,210);
+  chemLvl('w-acid',S.Acid_Tank_Level/100,40,160,250); chemLvl('w-cl',S.Chlorine_Tank_Level/100,38,165,245); chemLvl('w-coag',S.Coagulant_Tank_Level/100,34,170,244);
+
+  t('tv-l1',`${S.LIT_101.toFixed(0)} L`);t('tv-l3',`${S.LIT_301.toFixed(0)} L`);t('tv-l4',`${S.LIT_401.toFixed(0)} L`);
+  t('tv-fit101',`${S.FIT_101.toFixed(1)} m³/h`);t('tv-ph2',`pH ${pH.toFixed(2)}`);t('tv-turb',`${(S.AIT_201/10).toFixed(0)} NTU`);
+  t('tv-acid',`${S.Acid_Tank_Level.toFixed(0)}%`);t('tv-cl2',`${S.Chlorine_Tank_Level.toFixed(0)}%`);t('tv-coag',`${S.Coagulant_Tank_Level.toFixed(0)}%`);
+  t('tv-dpit-r',`${(S.DPIT_301/10).toFixed(0)} kPa`);t('tv-orp',`${S.AIT_402} mV`);t('tv-pit-r',`${(S.PIT_501/10).toFixed(1)}bar`);
+  t('tv-tds-r',`${S.TDS_Permeate} mg/L`);t('tv-fit502',`FIT-502: ${(S.FIT_502/10).toFixed(1)}`);t('tv-fit601',`${(S.FIT_601/10).toFixed(1)} m³/h`);
+
+  // Pumps
+  pump('pb-p101','pa-p101',S.P_101);pump('pb-p102','pa-p102',S.P_102);
+  pump('pb-p203','pa-p203',S.P_203);pump('pb-p205','pa-p205',S.P_205);
+  pump('pb-p206','pa-p206',S.P_206);pump('pb-p301','pa-p301',S.P_301);
+  pump('pb-p602','pa-p602',S.P_602||S.UF_Backwash_Active);pump('pb-p403','pa-p403',S.P_403);
+  pump('pb-p401','pa-p401',S.P_401);pump('pb-p501','pa-p501',S.P_501);
+  pump('pb-p601','pa-p601',S.P_601);pump('pb-p603','pa-p603',S.P_603);
+
+  // Valves
+  valve('mv101-body','mv101-sym',S.MV_101>0);valve('mv201-body',null,S.MV_201>0);
+  valve('mv301-body',null,S.MV_301>0);
+  valve('mv303-body','mv303-sym',S.MV_303>0);valve('mv304-body','mv304-sym',S.MV_304>0);
+
+  // UV
+  const uv=ge('uv401'); if(uv)uv.style.opacity=S.UV_401?'1':'0.35';
+
+  // Pipes
+  pf('p-inlet',S.MV_101>0,'var(--accent-cyan)');pf('p-s1out',S.P_101||S.P_102,'var(--accent-cyan)');
+  pf('p-s12',S.MV_201>0,'var(--accent-cyan)');pf('p-s23',true,'var(--accent-cyan)');
+  pf('p-s3in',S.P_301,'var(--accent-cyan)');pf('p-s4in',S.P_401,'var(--accent-teal)');
+  pf('p-s34',S.P_401,'var(--accent-teal)');pf('p-ro-in',S.P_501,'var(--accent-teal)');
+  pf('p-s45',S.P_501,'var(--accent-teal)');pf('p-perm',S.P_501,'var(--accent-green)');
+  pf('p-s56',S.P_601,'var(--accent-green)');
+
+  // Sensors
+  sd('d-fit101',S.FIT_101<0.5?'warn':'ok');sd('d-ph',phc);sd('d-turb','ok');
+  sd('d-dpit',dpitc);sd('d-orp','ok');sd('d-pit501',pitc);sd('d-tds','ok');sd('d-fit601','ok');
+
+  // Fouling bars
+  barW('uf-bar',S.UF_Fouling_Factor,64,S.UF_Fouling_Factor>70?'var(--accent-red)':S.UF_Fouling_Factor>40?'var(--accent-amber)':'var(--accent-green)');
+  barW('ro-bar',S.RO_Fouling_Factor,116,S.RO_Fouling_Factor>70?'var(--accent-red)':S.RO_Fouling_Factor>40?'var(--accent-amber)':'var(--accent-blue)');
+
+  // Alarm overlays
+  alm('alm-bw',S.UF_Backwash_Active);alm('alm-hp',S.High_Pressure_Alarm);
+  alm('alm-ro',S.RO_Cleaning_Active);alm('alm-lvl',S.High_Level_Alarm);
+  alm('alm-chem',S.Chemical_Low_Alarm);alm('alm-ph',S.AIT_202>900||S.AIT_202<550);
+
+  // System status
+  const dot=ge('sys-dot'),lbl=ge('sys-lbl'),badge=ge('alarm-badge');
+  if(attackActive){dot.className='status-dot alarm';lbl.textContent='ATTACK ACTIVE';badge.className='alarm-badge active';}
+  else if(!S.System_Run){dot.className='status-dot alarm';lbl.textContent='SYSTEM ALARM';badge.className='alarm-badge active';}
+  else if(S.Chemical_Low_Alarm||S.High_Fouling_Alarm){dot.className='status-dot warn';lbl.textContent='WARNING';badge.className='alarm-badge';}
+  else{dot.className='status-dot';lbl.textContent='SYSTEM NORMAL';badge.className='alarm-badge';}
+
+  // Coils
+  updateCoils();drawSparks();checkAlarms();
+}
+
+// ═══════════════════════════════════ HELPERS ═══════════════════════════════════
+const ge=id=>document.getElementById(id);
+function t(id,v){const e=ge(id);if(e)e.textContent=v;}
+function setKpi(card,val,html,cls,barId,barPct){
+  const c=ge(card),v=ge(val);
+  if(c){c.className='kpi-card'+(cls?' '+cls:'');}
+  if(v){v.innerHTML=html;v.className='kpi-value'+(cls?' '+cls:'');}
+  if(barId&&ge(barId))ge(barId).style.width=clamp(barPct||0,0,100)+'%';
+}
+function tankLvl(id,frac,maxH,tankY,tankBot){
+  const e=ge(id);if(!e)return;const h=Math.max(1,frac*maxH);e.setAttribute('height',h);e.setAttribute('y',tankBot-h);
+}
+function chemLvl(id,frac,mH,ty,tb){
+  const e=ge(id);if(!e)return;const h=Math.max(1,frac*mH);e.setAttribute('height',h);e.setAttribute('y',tb-h);
+}
+function pump(bodyId,arrowId,on){
+  const b=ge(bodyId),a=arrowId?ge(arrowId):null;
+  if(b)b.className.baseVal=on?'pump-on':'pump-off';
+  if(a)a.className.baseVal=on?'pump-arrow-on':'pump-arrow-off';
+}
+function valve(bodyId,symId,open){
+  const b=ge(bodyId),s=symId?ge(symId):null;
+  if(b)b.className.baseVal=open?'valve-open':'valve-closed';
+  if(s)s.style.fill=open?'var(--accent-green)':'#1a3050';
+}
+function pf(id,flowing,col){
+  const e=ge(id);if(!e)return;
+  e.className.baseVal='pipe '+(flowing?'flow-active':'pipe-dead');
+  if(col&&flowing)e.style.stroke=col;
+}
+function sd(id,status){const e=ge(id);if(!e)return;e.className.baseVal='sensor-'+status;}
+function alm(id,active){const e=ge(id);if(e)e.style.opacity=active?1:0;}
+function barW(id,val,maxW,col){const e=ge(id);if(!e)return;e.setAttribute('width',Math.round(val/100*maxW));e.style.fill=col;}
+
+function updateCoils(){
+  const coils=[
+    ['P101',S.P_101,false],['P102',S.P_102,false],['P203',S.P_203,false],['P205',S.P_205,false],
+    ['P206',S.P_206,false],['P301',S.P_301,false],['P401',S.P_401,false],['P403',S.P_403,false],
+    ['P501',S.P_501,false],['P601',S.P_601,false],['P603',S.P_603,false],['UV401',S.UV_401,false],
+    ['BW',S.UF_Backwash_Active,true],['ROClean',S.RO_Cleaning_Active,true],
+    ['HiLvl',S.High_Level_Alarm,true],['HiPrs',S.High_Pressure_Alarm,true],
+    ['ChemLow',S.Chemical_Low_Alarm,true],['SysRun',S.System_Run,false],
+  ];
+  ge('coil-grid').innerHTML=coils.map(([n,v,isAlm])=>{
+    const cls=isAlm&&v?'coil-alarm':v?'coil-on':'coil-off';
+    return`<div class="coil-chip ${cls}">${n}</div>`;
+  }).join('');
+}
+
+function drawSparks(){
+  const sparks=[
+    ['sp-l1',H.LIT_101,'#00d4ff'],['sp-ph',H.AIT_202,'#00e676'],
+    ['sp-dpit',H.DPIT_301,'#ffab00'],['sp-pit',H.PIT_501,'#2979ff'],
+    ['sp-fit',H.FIT_101,'#00ffc8'],['sp-cl',H.Chlorine_Residual,'#d500f9']
+  ];
+  sparks.forEach(([id,data,col])=>{
+    const c=ge(id);if(!c||data.length<2)return;
+    const W=c.width,H2=c.height;
+    const ctx=c.getContext('2d');ctx.clearRect(0,0,W,H2);
+    const mn=Math.min(...data),mx=Math.max(...data),r=mx-mn||1;
+    ctx.beginPath();
+    data.forEach((v,i)=>{const x=(i/(data.length-1))*W,y=H2-4-((v-mn)/r)*(H2-8);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
+    ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.stroke();
+    ctx.lineTo(W,H2);ctx.lineTo(0,H2);ctx.closePath();
+    ctx.fillStyle=col+'18';ctx.fill();
+    const lv=H2-4-((data[data.length-1]-mn)/r)*(H2-8);
+    ctx.beginPath();ctx.arc(W-1,lv,3,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();
+  });
+}
+
+function checkAlarms(){
+  const checks=[
+    ['High_Level_Alarm','HIGH LEVEL ALARM — tank overflow risk','crit'],
+    ['High_Pressure_Alarm','HIGH RO PRESSURE — membrane at risk','crit'],
+    ['Chemical_Low_Alarm','CHEMICAL TANK LOW — check dosing supply','warn'],
+    ['UF_Backwash_Active','UF backwash cycle initiated','ok'],
+    ['RO_Cleaning_Active','RO CIP cleaning in progress','warn'],
+  ];
+  checks.forEach(([k,msg,cls])=>{
+    if(S[k]&&!prevAlm[k])logEv(msg,cls);
+    if(!S[k]&&prevAlm[k]&&cls!=='crit')logEv(msg.replace('initiated','completed').replace('in progress','completed').replace('LOW','restored'),'ok');
+    prevAlm[k]=S[k];
+  });
+  if((S.AIT_202>900||S.AIT_202<550)&&!prevAlm.phInterlock){logEv('pH INTERLOCK FIRED — pumps tripped','crit');prevAlm.phInterlock=true;}
+  else if(S.AIT_202>=550&&S.AIT_202<=900)prevAlm.phInterlock=false;
+}
+
+function logEv(msg,cls){
+  const log=ge('event-log');
+  const now=new Date();
+  const ts=`${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+  const el=document.createElement('div');
+  el.className=`ev-row ${cls}`;
+  el.innerHTML=`<span class="ev-time">${ts}</span><span class="ev-msg">${msg}</span>`;
+  log.insertBefore(el,log.firstChild);
+  if(log.children.length>80)log.removeChild(log.lastChild);
+}
+
+// ═══════════════════════════════════ CONTROLS ═══════════════════════════════════
+function togglePause(){paused=!paused;ge('pause-btn').textContent=paused?'▶ RESUME':'⏸ PAUSE';logEv(paused?'Simulation paused':'Simulation resumed','info');}
+function resetSim(){
+  Object.assign(S,{LIT_101:500,LIT_301:800,LIT_401:500,AIT_202:720,DPIT_301:250,UF_Fouling_Factor:0,RO_Fouling_Factor:0,PIT_501:1200,Acid_Tank_Level:75,Chlorine_Tank_Level:80,Chlorine_Residual:30});
+  attackActive=false;attackType=null;tick=0;Object.keys(H).forEach(k=>H[k]=[]);
+  ge('attack-label').textContent='NO ATTACK ACTIVE';
+  document.querySelectorAll('.atk-btn').forEach(b=>b.classList.remove('active'));
+  logEv('System reset to initial state','ok');
+}
+let selectedAttack=null;
+function setAttack(type){
+  selectedAttack=type;
+  document.querySelectorAll('.atk-btn').forEach(b=>b.classList.remove('active'));
+  const ids={ph_manip:'atk-ph',tank_overflow:'atk-tank',mem_damage:'atk-mem',chem_depl:'atk-chem',valve_manip:'atk-valve',dos:'atk-dos'};
+  if(ids[type])ge(ids[type]).classList.add('active');
+}
+function injectAttack(){
+  if(!selectedAttack){logEv('Select an attack type first','warn');return;}
+  attackType=selectedAttack;attackActive=true;attackTimer=90;
+  const names={ph_manip:'pH Manipulation',tank_overflow:'Tank Overflow',mem_damage:'Membrane Damage',chem_depl:'Chemical Depletion',valve_manip:'Valve Manipulation',dos:'DoS/Reconnaissance'};
+  const n=names[attackType]||attackType;
+  ge('attack-label').textContent=`ACTIVE: ${n.toUpperCase()}`;
+  logEv(`⚡ ATTACK INJECTED: ${n} (90s)`, 'crit');
+}
+function stopAttack(){
+  attackActive=false;attackType=null;
+  ge('attack-label').textContent='NO ATTACK ACTIVE';
+  document.querySelectorAll('.atk-btn').forEach(b=>b.classList.remove('active'));
+  selectedAttack=null;
+  logEv('Attack stopped — system recovering','ok');
+}
+
+// ═══════════════════════════════════ WEBSOCKET ═══════════════════════════════════
+function toggleWS(){
+  if(ws&&ws.readyState===1){ws.close();ge('ws-btn').textContent='CONNECT';ge('ws-dot').className='ws-dot';ge('ws-status').textContent='SIMULATION MODE';logEv('Live WebSocket disconnected','warn');return;}
+  const url=ge('ws-url').value;
+  try{
+    ws=new WebSocket(url);
+    ws.onopen=()=>{ge('ws-dot').className='ws-dot live';ge('ws-status').textContent='LIVE DATA';ge('ws-btn').textContent='DISCONNECT';logEv('WebSocket connected — live data active','ok');};
+    ws.onmessage=(e)=>{try{const d=JSON.parse(e.data);Object.assign(S,d);pushHistory();}catch(err){}};
+    ws.onclose=()=>{ge('ws-dot').className='ws-dot';ge('ws-status').textContent='SIMULATION MODE';ge('ws-btn').textContent='CONNECT';};
+    ws.onerror=()=>logEv('WebSocket error — check server is running','crit');
+  }catch(e){logEv('Invalid WebSocket URL','crit');}
+}
+
+// ═══════════════════════════════════ TOOLTIP ═══════════════════════════════════
+const tt=ge('tooltip');
+document.querySelectorAll('[data-tip]').forEach(el=>{
+  el.addEventListener('mousemove',e=>{
+    tt.textContent=el.getAttribute('data-tip');tt.style.opacity='1';
+    tt.style.left=(e.clientX+14)+'px';tt.style.top=(e.clientY-8)+'px';
+  });
+  el.addEventListener('mouseleave',()=>tt.style.opacity='0');
+});
+
+// ═══════════════════════════════════ MAIN LOOP ═══════════════════════════════════
+logEv('SWaT Digital Twin HMI initialized','info');
+logEv('Simulation running at 10 Hz','ok');
+logEv('Connect WebSocket for live PLC data','info');
+setInterval(()=>{simTick();updateDOM();},100);
+</script>
+</body>
+</html>
