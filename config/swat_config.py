@@ -6,7 +6,7 @@ Added Chlorine_Residual variable at register 6
 # 192.168.5.194
 # Modbus connection settings
 MODBUS_CONFIG = {
-    'host': '192.168.5.195',
+    'host': '192.168.5.194',
     'port': 1502,
     'timeout': 3,
     'retries': 3,

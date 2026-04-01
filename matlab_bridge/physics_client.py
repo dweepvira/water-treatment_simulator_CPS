@@ -91,10 +91,8 @@
 #         log.info(f'CSV logger → {self.filepath}  ({"new file" if write_header else "append mode"})')
 
 #     def write(self, row: dict) -> None:
+#         # SCALE_MAP applied once in log_row() before this call — do NOT reapply here
 #         self._writer.writerow(row)
-#         for col, scale in SCALE_MAP.items():
-#             if col in row:
-#                 row[col] = round(row[col] * scale, 3)
 #         self._row_count += 1
 #         if self._row_count % self.flush_interval == 0:
 #             self._fh.flush()
@@ -117,7 +115,7 @@
 
 #     NORMAL = {'ATTACK_ID': 0, 'ATTACK_NAME': 'Normal', 'MITRE_ID': 'T0'}
 
-#     def __init__(self, filepath: Optional[str], read_interval: int = 5):
+#     def __init__(self, filepath: Optional[str], read_interval: int = 1):  # 1 = every cycle, 100 ms label lag max
 #         self.filepath      = Path(filepath) if filepath else None
 #         self.read_interval = read_interval
 #         self._current      = dict(self.NORMAL)
@@ -149,7 +147,7 @@
 
 #         return dict(self._current)
 
-# MV_NAMES = {'MV_101','MV_201','MV_301','MV_302','MV_303','MV_304'}
+
 # # ── Main bridge ──────────────────────────────────────────────────────────────
 
 # class MatlabPhysicsBridge:
@@ -298,14 +296,19 @@
 #             self._buf = ''
 #             return None
 
-    
+#     # MV registers are set by CODESYS ST logic — MATLAB never outputs them.
+#     # We must preserve whatever CODESYS wrote rather than overwriting with 0.
+#     MV_REGS = {'MV_101', 'MV_201', 'MV_301', 'MV_302', 'MV_303', 'MV_304'}
 
 #     def write_sensors(self, sensors: dict, actuators: dict = None) -> bool:
+#         """Write MATLAB sensor output to CODESYS holding registers (bulk FC16).
+#         MV registers are preserved from the actuators read — MATLAB does not own them.
+#         """
 #         max_addr  = max(REG_ADDR.values())
 #         reg_block = [0] * (max_addr + 1)
 #         for name, addr in REG_ADDR.items():
-#             if name in MV_NAMES:
-#                 # CODESYS owns these — preserve what we just read
+#             if name in self.MV_REGS:
+#                 # Preserve CODESYS value — do NOT overwrite with 0
 #                 if actuators and name in actuators:
 #                     reg_block[addr] = int(actuators[name])
 #             elif name in sensors:
@@ -382,9 +385,9 @@
 #                 if sensors is None:
 #                     sensors = last_sensors   # hold last known good
 
-#                 # 3. Write sensors to CODESYS
+#                 # 3. Write sensors to CODESYS — preserve MV values from actuators
 #                 if sensors:
-#                     self.write_sensors(sensors,actuators)
+#                     self.write_sensors(sensors, actuators)
 #                     last_sensors = sensors
 
 #                     # 4. Log AFTER write — row reflects post-physics CODESYS state
@@ -477,6 +480,7 @@
 # if __name__ == '__main__':
 #     main()
 
+
 #!/usr/bin/env python3
 """
 matlab_bridge/physics_client.py
@@ -548,38 +552,60 @@ SCALE_MAP = {
 }
 class CSVLogger:
     """
-    Lightweight synchronous CSV logger.
-    Opens file in append mode so restarts don't lose data.
-    Flushes every flush_interval rows to avoid data loss on crash.
+    Lightweight synchronous CSV logger for 24-hour runs.
+    - Flushes every 100 rows (was 10) — 10x fewer fsync calls
+    - Rotates to new part file every 3M rows (~5 hr) to keep files <500 MB
+      Part files: master_dataset.csv, master_dataset_part2.csv, ...
     """
 
-    def __init__(self, filepath: str, flush_interval: int = 10):
-        self.filepath       = Path(filepath)
-        self.flush_interval = flush_interval
-        self._row_count     = 0
-        self.filepath.parent.mkdir(parents=True, exist_ok=True)
+    MAX_ROWS       = 3_000_000
+    FLUSH_INTERVAL = 100
 
-        # Write header only if file is new / empty
-        write_header = not self.filepath.exists() or self.filepath.stat().st_size == 0
-        self._fh = open(self.filepath, 'a', newline='', encoding='utf-8')
+    def __init__(self, filepath: str, flush_interval: int = None):
+        self.base_path      = Path(filepath)
+        self.flush_interval = flush_interval or self.FLUSH_INTERVAL
+        self._row_count     = 0
+        self._part_rows     = 0
+        self._part          = 1
+        self._fh            = None
+        self._writer        = None
+        self.base_path.parent.mkdir(parents=True, exist_ok=True)
+        self._open_part(self.base_path)
+
+    def _part_path(self, part: int) -> Path:
+        if part == 1:
+            return self.base_path
+        return self.base_path.with_stem(self.base_path.stem + f'_part{part}')
+
+    def _open_part(self, path: Path) -> None:
+        if self._fh:
+            self._fh.flush(); self._fh.close()
+        write_header = not path.exists() or path.stat().st_size == 0
+        self._fh     = open(path, 'a', newline='', encoding='utf-8')
         self._writer = csv.DictWriter(self._fh, fieldnames=CSV_COLUMNS,
                                       extrasaction='ignore')
         if write_header:
-            self._writer.writeheader()
-            self._fh.flush()
-        log.info(f'CSV logger → {self.filepath}  ({"new file" if write_header else "append mode"})')
+            self._writer.writeheader(); self._fh.flush()
+        self._part_rows = 0
+        self.filepath   = path   # expose current path for logging
+        log.info(f'CSV logger → {path}  ({"new file" if write_header else "append mode"})')
 
     def write(self, row: dict) -> None:
-        # SCALE_MAP applied once in log_row() before this call — do NOT reapply here
+        # Scale_map applied once in log_row — do NOT reapply here
         self._writer.writerow(row)
         self._row_count += 1
+        self._part_rows += 1
         if self._row_count % self.flush_interval == 0:
             self._fh.flush()
+        if self._part_rows >= self.MAX_ROWS:
+            self._part += 1
+            log.info(f'CSV rotation → part {self._part} ({self._row_count} total rows)')
+            self._open_part(self._part_path(self._part))
 
     def close(self) -> None:
-        self._fh.flush()
-        self._fh.close()
-        log.info(f'CSV closed — {self._row_count} rows written to {self.filepath}')
+        if self._fh:
+            self._fh.flush(); self._fh.close()
+        log.info(f'CSV closed — {self._row_count} rows written ({self._part} part(s))')
 
 
 # ── Attack metadata reader ───────────────────────────────────────────────────
@@ -592,9 +618,9 @@ class AttackMetadataReader:
     Re-reads every read_interval cycles to pick up attack start/end.
     """
 
-    NORMAL = {'ATTACK_ID': 0, 'ATTACK_NAME': 'Normal', 'MITRE_ID': 'T0'}
+    NORMAL = {'ATTACK_ID': 0, 'ATTACK_NAME': 'Normal', 'MITRE_ID': 'T0', 'params': {}}
 
-    def __init__(self, filepath: Optional[str], read_interval: int = 5):
+    def __init__(self, filepath: Optional[str], read_interval: int = 1):  # 1 = every cycle, 100 ms label lag max
         self.filepath      = Path(filepath) if filepath else None
         self.read_interval = read_interval
         self._current      = dict(self.NORMAL)
@@ -616,6 +642,7 @@ class AttackMetadataReader:
                         'ATTACK_ID':   data.get('ATTACK_ID',   0),
                         'ATTACK_NAME': data.get('ATTACK_NAME', 'Normal'),
                         'MITRE_ID':    data.get('MITRE_ID',    'T0'),
+                        'params':      data.get('params',      {}),   # ← attack parameters
                     }
                     if self._current['ATTACK_NAME'] != self._last_label:
                         log.info(f"Attack label → {self._current['ATTACK_NAME']} "
@@ -680,6 +707,7 @@ class MatlabPhysicsBridge:
 
         self._stats = dict(cycles=0, matlab_timeouts=0,
                            modbus_errors=0, rows_logged=0, start_time=None)
+        self._attack_state: dict = {}   # persistent state across cycles (ramp position etc.)
 
     # ── TCP connection to MATLAB ────────────────────────────────────────────
 
@@ -775,38 +803,157 @@ class MatlabPhysicsBridge:
             self._buf = ''
             return None
 
-    # MV registers are set by CODESYS ST logic — MATLAB never outputs them.
-    # We must preserve whatever CODESYS wrote rather than overwriting with 0.
-    MV_REGS = {'MV_101', 'MV_201', 'MV_301', 'MV_302', 'MV_303', 'MV_304'}
-
-    def write_sensors(self, sensors: dict, actuators: dict = None) -> bool:
-        """Write MATLAB sensor output to CODESYS holding registers (bulk FC16).
-        MV registers are preserved from the actuators read — MATLAB does not own them.
-        """
+    def write_sensors(self, sensors: dict) -> bool:
+        """Write MATLAB sensor output to CODESYS holding registers (bulk FC16)."""
         max_addr  = max(REG_ADDR.values())
         reg_block = [0] * (max_addr + 1)
         for name, addr in REG_ADDR.items():
-            if name in self.MV_REGS:
-                # Preserve CODESYS value — do NOT overwrite with 0
-                if actuators and name in actuators:
-                    reg_block[addr] = int(actuators[name])
-            elif name in sensors:
+            if name in sensors:
                 reg_block[addr] = max(0, min(65535, int(sensors[name])))
         ok = self.mb.write_multiple_registers(address=0, values=reg_block)
         if not ok:
             self._stats['modbus_errors'] += 1
         return ok
 
-    def log_row(self, sensors: dict, actuators: dict, cycle: int) -> None:
+    # Sensor registers that coil-based attacks drive through MATLAB physics
+    # (no override needed — MATLAB already responds to coil changes)
+    # NOTE: 8 (Tank Overflow) and 16 (Valve Manipulation) removed — they now
+    # have explicit sensor overrides below so CSV labels are always correct.
+    _COIL_DRIVEN_ATTACKS = {9}  # chemical_depletion only (coil-driven, no sensor spoof)
+
+    def _apply_attack_sensors(self, sensors: dict, label: dict) -> dict:
+        """
+        Apply attack-induced sensor modifications to MATLAB output BEFORE
+        writing to CODESYS and logging.
+
+        WHY THIS EXISTS:
+        command_injection.py writes sensor registers (AIT_202, DPIT_301 etc.)
+        to CODESYS at 25 Hz.  physics_client immediately overwrites them with
+        MATLAB values at 10 Hz — logged values always look normal.
+
+        By modifying sensors HERE (inside the bridge cycle) we guarantee:
+          - Attack values are written to CODESYS  →  ST logic reacts
+          - Attack values are logged to CSV        →  ML model sees them
+          - No race condition between two processes
+
+        Coil-driven attacks (chemical_depletion, tank_overflow, valve_manip)
+        already work correctly: command_injection.py flips coils, physics_client
+        sends them to MATLAB, MATLAB computes correct sensor response.
+        Those do NOT need overrides here.
+        """
+        import math, time as _time
+
+        atk_id = label.get('ATTACK_ID', 0)
+        params = label.get('params', {})
+
+        # Normal or coil-driven — no sensor override needed
+        if atk_id == 0 or atk_id in self._COIL_DRIVEN_ATTACKS:
+            if atk_id == 0:
+                self._attack_state.clear()
+            return sensors
+
+        s = dict(sensors)   # work on a copy
+
+        # ── pH Manipulation (ID 11) ───────────────────────────────────────
+        # Exponentially drive AIT_202 toward target using same τ=40 s as MATLAB
+        if atk_id == 11:
+            target = int(float(params.get('target_ph', 5.0)) * 100)
+            current = s.get('AIT_202', 720)
+            # Clamp target to valid register range [500, 900]
+            target = max(500, min(900, target))
+            new_val = current + (target - current) * (1.0 - math.exp(-self.DT / 40.0))
+            s['AIT_202'] = int(round(new_val))
+            log.debug(f'pH attack: AIT_202 {current}→{s["AIT_202"]} (target={target})')
+
+        # ── Slow Ramp (ID 12) ─────────────────────────────────────────────
+        # Increment target register by step_size every step_interval seconds
+        elif atk_id == 12:
+            reg_name      = params.get('ramp_target', 'AIT_202')
+            start_val     = float(params.get('start_value', 720))
+            end_val       = float(params.get('end_value', 860))
+            step_size     = float(params.get('step_size', 1))
+            step_interval = float(params.get('step_interval', 2.0))
+
+            if 'ramp_current' not in self._attack_state:
+                # Initialise from current sensor value so ramp starts cleanly
+                self._attack_state['ramp_current']   = float(s.get(reg_name, start_val))
+                self._attack_state['ramp_last_step'] = _time.monotonic()
+                log.info(f'Slow ramp start: {reg_name} {start_val}→{end_val}')
+
+            now = _time.monotonic()
+            if now - self._attack_state['ramp_last_step'] >= step_interval:
+                direction = 1 if end_val >= start_val else -1
+                self._attack_state['ramp_current'] += direction * step_size
+                self._attack_state['ramp_last_step'] = now
+
+            # Clamp within [min, max] of the ramp range
+            lo, hi = min(start_val, end_val), max(start_val, end_val)
+            self._attack_state['ramp_current'] = max(lo, min(hi, self._attack_state['ramp_current']))
+
+            if reg_name in s:
+                s[reg_name] = int(round(self._attack_state['ramp_current']))
+
+        # ── Membrane Damage (ID 10) ──────────────────────────────────────
+        # Accelerate DPIT_301 toward target TMP; accelerate UF fouling
+        elif atk_id == 10:
+            target_tmp  = int(params.get('target_tmp', 600))
+            current_dp  = s.get('DPIT_301', 250)
+            # Drive DPIT toward target at 50 kPa-register-units/s
+            s['DPIT_301'] = min(target_tmp, int(current_dp + 50 * self.DT))
+            # Accelerate fouling factor — triggers High_Fouling_Alarm in ST logic
+            s['UF_Fouling_Factor'] = min(100,
+                int(s.get('UF_Fouling_Factor', 0) + 5 * self.DT))
+
+        # ── Tank Overflow (ID 8) ─────────────────────────────────────────
+        # Attack spoofs LIT_101 reading LOW so ST logic keeps MV_101 open
+        # and inlet flow continues — actual level climbs above 950 L.
+        # We raise LIT_101 in the logged CSV to reflect real physics while
+        # also jamming MV_101/P_101 coil state overrides via metadata.
+        elif atk_id == 8:
+            overflow_target = int(params.get('overflow_value', 1000))
+            current_lit = s.get('LIT_101', 500)
+            # Ramp LIT_101 upward at ~1.5 L/s (inlet > outlet with P_101 off)
+            new_lit = min(overflow_target, int(current_lit + 1.5 / self.DT * self.DT))
+            s['LIT_101'] = new_lit
+            # Flow sensors: inlet stays high, outlet drops (pump blocked)
+            s['FIT_101'] = max(s.get('FIT_101', 50), 50)   # inlet stays open
+            s['FIT_201'] = 0                                 # outlet blocked
+            # Raise High_Level_Alarm register if present
+            if new_lit > 950:
+                log.debug(f'Tank Overflow: LIT_101={new_lit} > 950 — alarm condition')
+
+        # ── Valve Manipulation (ID 16) ───────────────────────────────────
+        # Force MV_101 / MV_301 to closed (0) in the sensor output so
+        # CODESYS sees them as closed; flows drop to near-zero.
+        # LIT_101 drains into S1 (no inlet), LIT_301 rises unchecked.
+        elif atk_id == 16:
+            # Close inlet and UF feed valves
+            s['MV_101'] = 0
+            s['MV_301'] = 0
+            s['MV_302'] = 0
+            # Flows to near-zero (closed valves → no flow)
+            s['FIT_101'] = 0
+            s['FIT_201'] = 0
+            s['FIT_301'] = 0
+            # LIT_101 drains (no inlet), LIT_301 rises (no UF outlet)
+            s['LIT_101'] = max(0,   int(s.get('LIT_101', 500) - 2))
+            s['LIT_301'] = min(1000, int(s.get('LIT_301', 700) + 1))
+            log.debug(f'Valve Manip: MV_101/301/302=0 FIT_101/201/301=0 '
+                      f'LIT_101={s["LIT_101"]} LIT_301={s["LIT_301"]}')
+
+        return s
+
+    def log_row(self, sensors: dict, actuators: dict, cycle: int, label: dict = None) -> None:
         """
         Write one CSV row.
         Called AFTER write_sensors() so values are already in CODESYS.
-        Row = timestamp + all sensor registers + all coil states + attack label.
+        label can be passed in (already fetched) or will be read here.
         """
         if self.csv_logger is None:
             return
 
-        label = self.attack_meta.get(cycle)
+        if label is None:
+            label = self.attack_meta.get(cycle)
 
         row = {'Timestamp': datetime.now(timezone.utc).isoformat()}
 
@@ -864,13 +1011,20 @@ class MatlabPhysicsBridge:
                 if sensors is None:
                     sensors = last_sensors   # hold last known good
 
-                # 3. Write sensors to CODESYS — preserve MV values from actuators
+                # 2b. Apply attack sensor overrides BEFORE writing to CODESYS.
+                #     This guarantees attack values appear in both CODESYS and CSV.
+                #     Reads attack params from attack_metadata.json (every 5 cycles).
+                label = self.attack_meta.get(self._stats['cycles'])
                 if sensors:
-                    self.write_sensors(sensors, actuators)
+                    sensors = self._apply_attack_sensors(sensors, label)
+
+                # 3. Write sensors to CODESYS
+                if sensors:
+                    self.write_sensors(sensors)
                     last_sensors = sensors
 
                     # 4. Log AFTER write — row reflects post-physics CODESYS state
-                    self.log_row(sensors, actuators, self._stats['cycles'])
+                    self.log_row(sensors, actuators, self._stats['cycles'], label)
 
                 self._stats['cycles'] += 1
 

@@ -170,8 +170,8 @@ THRESHOLDS = {
 #  PLOTTING THEME
 # ════════════════════════════════════════════════════════════════════════════════
 
-DARK_BG   = '#0a0f1e'
-PANEL_BG  = '#111827'
+DARK_BG   = "#dee7ff"
+PANEL_BG  = "#BAC0CB"
 GRID_COL  = '#1f2937'
 CYAN      = '#00d4ff'
 TEAL      = '#00ffc8'
@@ -227,6 +227,7 @@ class DataLoader:
         dfs = []
         for i, folder in enumerate(self.run_folders, 1):
             csv_path = self.data_dir / folder / 'master_dataset.csv'
+            print(csv_path)
             if not csv_path.exists():
                 # Also try direct CSV
                 csv_path = self.data_dir / f'{folder}.csv'
@@ -241,6 +242,7 @@ class DataLoader:
             # Parse timestamp
             if 'Timestamp' in df.columns:
                 df['Timestamp'] = pd.to_datetime(df['Timestamp'], utc=True, errors='coerce')
+                df = df.dropna(subset=['Timestamp'])
                 df = df.sort_values('Timestamp').reset_index(drop=True)
                 t0 = df['Timestamp'].iloc[0]
                 df['elapsed_s'] = (df['Timestamp'] - t0).dt.total_seconds().round(2)
@@ -478,32 +480,95 @@ class Preprocessor:
 # ════════════════════════════════════════════════════════════════════════════════
 
 class FeatureEngineer:
-    """ICS domain-specific feature engineering."""
+    """ICS + Cyber-Physical feature engineering (ENHANCED VERSION)"""
 
     def __init__(self, df: pd.DataFrame, output_dir: Path):
         self.df  = df.copy()
         self.out = output_dir
 
-    def run(self) -> Tuple[pd.DataFrame, List[str]]:
+    def run(self):
         log.info("\n" + "="*60)
-        log.info("STAGE 4: FEATURE ENGINEERING")
+        log.info("STAGE 4: FEATURE ENGINEERING (CYBER + PHYSICAL)")
         log.info("="*60)
-        new_feats = []
 
-        new_feats += self._temporal_derivatives()
-        new_feats += self._rolling_statistics()
-        new_feats += self._mass_balance_residuals()
-        new_feats += self._physical_consistency_flags()
-        new_feats += self._chemical_tank_rates()
-        new_feats += self._cross_stage_correlations()
-        new_feats += self._fouling_acceleration()
-        new_feats += self._pump_duty_cycle()
-        new_feats += self._alarm_proximity_features()
+        feats = []
 
-        log.info(f"  TOTAL NEW FEATURES: {len(new_feats)}")
-        log.info(f"  FINAL FEATURE SPACE: {len(self.df.columns)} columns")
-        self._plot_feature_distributions(new_feats)
-        return self.df, new_feats
+        feats += self._time_features()              # ⭐ NEW (CRITICAL)
+        feats += self._temporal_derivatives()
+        feats += self._rolling_statistics()
+        feats += self._network_delay_features()     # ⭐ NEW
+        feats += self._actuator_delay_features()    # ⭐ NEW
+        feats += self._mass_balance_residuals()
+        feats += self._physical_consistency_flags()
+
+        log.info(f"TOTAL FEATURES: {len(self.df.columns)}")
+        return self.df, feats
+    
+
+    def _time_features(self):
+        feats = []
+
+        if 'Timestamp' not in self.df.columns:
+            return feats
+
+        # ✅ FORCE proper datetime conversion (CRITICAL FIX)
+        self.df['Timestamp'] = pd.to_datetime(
+            self.df['Timestamp'],
+            errors='coerce',
+            utc=True
+        )
+
+        # ✅ DROP invalid timestamps (VERY IMPORTANT)
+        before = len(self.df)
+        self.df = self.df.dropna(subset=['Timestamp'])
+        after = len(self.df)
+
+        log.info(f"    Dropped {before - after} invalid timestamps")
+
+        # ✅ ENSURE run_id is integer (avoid mixed types)
+        self.df['run_id'] = self.df['run_id'].astype(int)
+
+        # ✅ SORT safely
+        self.df = self.df.sort_values(['run_id', 'Timestamp']).reset_index(drop=True)
+
+        # ✅ COMPUTE DELTA TIME
+        self.df['delta_t'] = (
+            self.df.groupby('run_id')['Timestamp']
+            .diff()
+            .dt.total_seconds()
+        )
+
+        self.df['delta_t'].fillna(0, inplace=True)
+
+        # ✅ Z-score (network anomaly)
+        mu = self.df['delta_t'].mean()
+        std = self.df['delta_t'].std() + 1e-6
+
+        self.df['delta_t_zscore'] = (self.df['delta_t'] - mu) / std
+
+        # ✅ anomaly flag
+        self.df['time_anomaly'] = (self.df['delta_t'] > 0.5).astype(int)
+
+        feats += ['delta_t', 'delta_t_zscore', 'time_anomaly']
+
+        log.info(f"    Time features: {len(feats)}")
+
+        return feats
+    
+    def _network_delay_features(self):
+        feats = []
+
+        # Rolling delay
+        self.df['delay_roll_mean'] = self.df.groupby('run_id')['delta_t'].transform(
+            lambda x: x.rolling(20, min_periods=1).mean()
+        )
+
+        self.df['delay_spike'] = (self.df['delta_t'] > self.df['delay_roll_mean'] * 2).astype(int)
+
+        feats += ['delay_roll_mean', 'delay_spike']
+        log.info(f"    Network delay features: {len(feats)}")
+
+        return feats
 
     def _temporal_derivatives(self) -> List[str]:
         """Rate of change (first derivative) for key sensors."""
@@ -526,6 +591,25 @@ class FeatureEngineer:
                     self.df[name2] = self.df[name].diff().fillna(0)
                 feats.append(name2)
         log.info(f"    Temporal derivatives: {len(feats)} features")
+        return feats
+    
+    def _actuator_delay_features(self):
+        feats = []
+
+        if 'LIT_101' in self.df.columns and 'MV_101' in self.df.columns:
+
+            # Level rising
+            self.df['level_rising'] = (self.df['LIT_101'] > self.df['LIT_101'].shift(1)).astype(int)
+
+            # Pump not responding
+            self.df['pump_delay'] = (
+                (self.df['level_rising'] == 1) &
+                (self.df['MV_101'].shift(-5) == 0)
+            ).astype(int)
+
+            feats += ['level_rising', 'pump_delay']
+
+        log.info(f"    Actuator delay features: {len(feats)}")
         return feats
 
     def _rolling_statistics(self, windows=[10, 30, 60]) -> List[str]:
@@ -1587,7 +1671,7 @@ def main(data_dir: str = '.', runs: List[str] = None, output_dir: str = 'ml_outp
     print("║  SWaT ICS ANOMALY DETECTION — END-TO-END ML PIPELINE            ║")
     print("║  MTech AI & Data Science · VJTI Mumbai                           ║")
     print("╚"+"═"*68+"╝\n")
-
+    print(f"  Starting pipeline with data directory: {data_dir}")
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -1670,7 +1754,7 @@ Examples:
   python swat_ml_pipeline.py --merged-csv merged_dataset.csv
         """
     )
-    parser.add_argument('--data-dir',    default='.', help='Root directory of run folders')
+    parser.add_argument('--data-dir',    default='data', help='Root directory of run folders')
     parser.add_argument('--runs',        nargs='+', default=None, help='Run folder names')
     parser.add_argument('--output-dir',  default='ml_output', help='Output directory for plots and results')
     parser.add_argument('--merged-csv',  default=None, help='Use pre-merged CSV instead of run folders')

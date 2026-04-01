@@ -276,17 +276,18 @@ Available attacks (pass comma-separated to --include-attacks):
                         help='Comma-separated list of attack types to inject. '
                              'Passed directly to automated_dataset_generator.py.')
     parser.add_argument('--attack-script',
-                        default='automated_dataset_generator.py',
+                        default='attack_schedular_24h.py',
                         metavar='PATH',
                         help='Path to attack injector script '
-                             '(default: automated_dataset_generator.py)')
+                             '(default: attack_schedular_24h.py)')
 
     args = parser.parse_args()
 
     # Validate attack args
-    if args.include_attacks and args.attack is None:
+    IS_24H_SCHEDULER = '24h' in args.attack_script or 'schedular' in args.attack_script or 'scheduler' in args.attack_script
+    if args.include_attacks and args.attack is None and not IS_24H_SCHEDULER:
         parser.error('--include-attacks requires --attack <minutes>')
-    if args.attack and not args.include_attacks:
+    if args.attack and not args.include_attacks and not IS_24H_SCHEDULER:
         parser.error('--attack requires --include-attacks <attack1,attack2,...>')
 
     procs: list  = []
@@ -452,33 +453,42 @@ Available attacks (pass comma-separated to --include-attacks):
             print('  Physics bridge started (logging disabled).')
 
     # ── Step 4: Attack injector (optional) ────────────────────────────────────
+    IS_24H_SCHEDULER = '24h' in args.attack_script or 'schedular' in args.attack_script or 'scheduler' in args.attack_script
     attack_proc = None
-    if args.include_attacks:
+    # Launch if: --include-attacks given (any script), OR it's the 24h scheduler (self-contained)
+    if args.include_attacks or IS_24H_SCHEDULER:
         attack_script = Path(args.attack_script)
         if not attack_script.exists():
-            print(f'\n[5/5] WARNING: Attack script not found: {attack_script}')
+            print(f'\n[4/4] WARNING: Attack script not found: {attack_script}')
             print('       Continuing without attack injection.')
         else:
             print(f'\n[4/4] Starting attack injector ...')
             # Wait for logger and bridge to stabilise before injecting
             time.sleep(5)
             cmd = [sys.executable, str(attack_script),
-                   '--host',            args.host,
-                   '--port',            str(args.port),
-                   '--output',          str(run_dir),
-                   '--include-attacks', args.include_attacks]
+                   '--host',   args.host,
+                   '--port',   str(args.port),
+                   '--output', str(run_dir)]
             if args.total:
-                cmd += ['--total',  str(args.total)]
+                cmd += ['--total', str(args.total)]
             if args.attack:
                 cmd += ['--attack', str(args.attack)]
+            # Pass --include-attacks only for automated_dataset_generator.py
+            # (attack_schedular_24h.py ignores it but accepts it harmlessly)
+            if args.include_attacks:
+                cmd += ['--include-attacks', args.include_attacks]
             attack_proc = subprocess.Popen(cmd)
             procs.append(attack_proc)
-            print(f'  Attack injector started.')
-            print(f'  Attacks : {args.include_attacks}')
+            print(f'  Attack injector started: {attack_script.name}')
+            if IS_24H_SCHEDULER:
+                print(f'  Mode    : 24h scheduler (all attack types, randomised)')
+            else:
+                print(f'  Attacks : {args.include_attacks}')
             if args.attack:
                 print(f'  Attack duration : {args.attack} min')
     else:
         print('\n[4/4] No attacks specified — logging normal operation only.')
+
 
     # ── Summary ───────────────────────────────────────────────────────────────
     print('\n' + '=' * 60)
@@ -505,19 +515,23 @@ Available attacks (pass comma-separated to --include-attacks):
     run_end = (time.time() + args.total * 60) if args.total else None
 
     while True:
-        # Auto-stop when total duration reached
         if run_end and time.time() >= run_end:
-            print(f'\n  Run complete ({args.total} min elapsed).')
-            print(f'  Dataset saved to: {run_dir.resolve()}')
+            print(f'\n  Run complete.')
             _cleanup(procs)
             return 0
 
-        # Warn if any child (except Windows matlab launcher) has died
-        for p in list(procs):
+        for i, p in enumerate(list(procs)):
             rc = p.poll()
             if rc is not None and not (rc == 0 and is_win):
-                print(f'  WARNING: subprocess PID {p.pid} exited (code {rc}) '
-                      f'— system may be degraded.')
+                print(f'  WARNING: PID {p.pid} exited (code {rc}).')
+                # Restart bridge if it dies — prevents silent logging stop
+                if 'physics_client' in ' '.join(p.args):
+                    print('  CRITICAL: Bridge died — restarting ...')
+                    new_proc = subprocess.Popen(p.args)
+                    procs[i] = new_proc
+                    print(f'  Bridge restarted (PID {new_proc.pid})')
+
+        time.sleep(5)
 
         # Progress tick every 60 s when a timed run is active
         if run_end:
