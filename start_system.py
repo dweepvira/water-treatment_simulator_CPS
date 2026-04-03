@@ -276,15 +276,14 @@ Available attacks (pass comma-separated to --include-attacks):
                         help='Comma-separated list of attack types to inject. '
                              'Passed directly to automated_dataset_generator.py.')
     parser.add_argument('--attack-script',
-                        default='attack_schedular_24h.py',
+                        default=None,
                         metavar='PATH',
-                        help='Path to attack injector script '
-                             '(default: attack_schedular_24h.py)')
+                        help='Path to attack injector script (e.g. attack_schedular_24h.py)')
 
     args = parser.parse_args()
 
     # Validate attack args
-    IS_24H_SCHEDULER = '24h' in args.attack_script or 'schedular' in args.attack_script or 'scheduler' in args.attack_script
+    IS_24H_SCHEDULER = bool(args.attack_script and ('24h' in args.attack_script or 'schedular' in args.attack_script or 'scheduler' in args.attack_script))
     if args.include_attacks and args.attack is None and not IS_24H_SCHEDULER:
         parser.error('--include-attacks requires --attack <minutes>')
     if args.attack and not args.include_attacks and not IS_24H_SCHEDULER:
@@ -453,11 +452,13 @@ Available attacks (pass comma-separated to --include-attacks):
             print('  Physics bridge started (logging disabled).')
 
     # ── Step 4: Attack injector (optional) ────────────────────────────────────
-    IS_24H_SCHEDULER = '24h' in args.attack_script or 'schedular' in args.attack_script or 'scheduler' in args.attack_script
+    IS_24H_SCHEDULER = bool(args.attack_script and ('24h' in args.attack_script or 'schedular' in args.attack_script or 'scheduler' in args.attack_script))
     attack_proc = None
     # Launch if: --include-attacks given (any script), OR it's the 24h scheduler (self-contained)
     if args.include_attacks or IS_24H_SCHEDULER:
-        attack_script = Path(args.attack_script)
+        # If include_attacks but no script was passed, default to automated_dataset_generator.py
+        script_to_run = args.attack_script or 'automated_dataset_generator.py'
+        attack_script = Path(script_to_run)
         if not attack_script.exists():
             print(f'\n[4/4] WARNING: Attack script not found: {attack_script}')
             print('       Continuing without attack injection.')

@@ -11,3 +11,5 @@ dist/
 build/
 *.egg-info/
 saved_models/
+data/
+logs/
