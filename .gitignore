@@ -13,3 +13,4 @@ build/
 saved_models/
 data/
 logs/
+*.ipynb
