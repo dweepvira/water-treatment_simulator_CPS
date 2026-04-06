@@ -1677,7 +1677,7 @@ def main(data_dir: str = '.', runs: List[str] = None, output_dir: str = 'ml_outp
 
     # Default run list
     if runs is None:
-        runs = ['run_01','run_02','run_03','run_04','run_05']
+        runs = ['attack_24h_hw','run_01','run_02','run_03','run_04','run_05']
 
     # ── STAGE 1: Load & Merge ──────────────────────────────────────────────
     loader = DataLoader(data_dir, runs)
