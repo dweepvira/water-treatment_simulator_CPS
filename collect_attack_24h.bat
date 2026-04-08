@@ -13,7 +13,7 @@ set PYTHON=C:\Users\Dweep\miniconda3\envs\test\python.exe
 set HOST=192.168.5.195
 set PORT=1502
 set MATLAB_PATH=C:\Users\Dweep\Documents\water-cps
-set OUTPUT=data\attack_24h_hw(1)
+set OUTPUT=data\attack_24h_hw
 set TOTAL_MIN=1440
 set ATTACK_SCRIPT=attack_schedular_24h.py
 
