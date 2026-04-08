@@ -10,10 +10,10 @@ cd /d "%~dp0"
 REM -- Python from conda test environment (full path avoids PATH issues)
 set PYTHON=C:\Users\Dweep\miniconda3\envs\test\python.exe
 
-set HOST=192.168.5.194
+set HOST=192.168.5.195
 set PORT=1502
 set MATLAB_PATH=C:\Users\Dweep\Documents\water-cps
-set OUTPUT=data\attack_24h_hw
+set OUTPUT=data\attack_24h_hw(1)
 set TOTAL_MIN=1440
 set ATTACK_SCRIPT=attack_schedular_24h.py
 
@@ -23,7 +23,7 @@ echo   SWaT  --  Attack 24-Hour Data Collection
 echo   Host     : %HOST%:%PORT%
 echo   Output   : %OUTPUT%\master_dataset.csv
 echo   Duration : %TOTAL_MIN% min  (24 h)
-echo   Attacks  : All 9 types  (~45%% of rows)
+echo   Attacks  : All 9 types  (~80%% of rows)
 echo   Python   : %PYTHON%
 echo ============================================================
 echo.
@@ -41,7 +41,7 @@ if not exist "logs"      mkdir "logs"
 
 REM -- Check for stale lockfile from a previous crashed run
 if exist "%OUTPUT%\attack_scheduler.lock" (
-    echo [WARNING] Stale lockfile found: %OUTPUT%\attack_scheduler.lock
+    echo [WARNING] Stale lockfile found: "%OUTPUT%\attack_scheduler.lock"
     echo.
     echo   This means a previous run crashed without cleaning up.
     echo   Deleting stale lock and continuing...
@@ -64,17 +64,19 @@ echo.
     --total                %TOTAL_MIN%      ^
     --attack-script        %ATTACK_SCRIPT%
 
-if %ERRORLEVEL% EQU 0 (
-    echo.
-    echo [SUCCESS] Attack dataset collection complete!
-    echo.
-    echo --- Attack class distribution ---
-    "%PYTHON%" -c "
+if %ERRORLEVEL% NEQ 0 goto :failed
+
+echo.
+echo [SUCCESS] Attack dataset collection complete!
+echo.
+echo --- Attack class distribution ---
+"%PYTHON%" -c "
 import csv
 from collections import Counter
 try:
+    import os
     counts = Counter()
-    with open(r'%OUTPUT%\master_dataset.csv') as f:
+    with open(os.path.join(os.environ.get('OUTPUT', '.'), 'master_dataset.csv')) as f:
         for row in csv.DictReader(f):
             counts[row.get('ATTACK_NAME','Unknown')] += 1
     total = sum(counts.values())
@@ -91,17 +93,18 @@ try:
 except Exception as e:
     print(f'  Could not parse CSV: {e}')
 "
-    echo [%DATE% %TIME%] SUCCESS >> logs\collect_attack_24h.log
-) else (
-    echo.
-    echo [ERROR] Collection failed  --  exit code %ERRORLEVEL%
-    echo.
-    echo Troubleshooting:
-    echo   1. Is CODESYS reachable?  ping %HOST%
-    echo   2. Is MATLAB running?     Check port 9501
-    echo   3. See logs: %OUTPUT%\scheduler_execution.log
-    echo [%DATE% %TIME%] FAILED exit=%ERRORLEVEL% >> logs\collect_attack_24h.log
-)
+echo [%DATE% %TIME%] SUCCESS >> logs\collect_attack_24h.log
+goto :done
+
+:failed
+echo.
+echo [ERROR] Collection failed  --  exit code %ERRORLEVEL%
+echo.
+echo Troubleshooting:
+echo   1. Is CODESYS reachable?  ping %HOST%
+echo   2. Is MATLAB running?     Check port 9501
+echo   3. See logs: "%OUTPUT%\scheduler_execution.log"
+echo [%DATE% %TIME%] FAILED exit=%ERRORLEVEL% >> logs\collect_attack_24h.log
 
 :done
 echo.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+r"""
 start_system.py
 ================
 Launches the full MATLAB-Python-CODESYS stack with optional run-based
@@ -15,26 +15,26 @@ Start order:
   7. Auto-stop after --total minutes (if specified)
 
 Basic usage:
-    python start_system.py --host 192.168.5.195 --port 1502 \\
-        --matlab-path "C:\\path\\to\\m\\files" --reuse-existing-matlab
+    python start_system.py --host 192.168.5.195 --port 1502 \
+        --matlab-path "C:\path\to\m\files" --reuse-existing-matlab
 
 Run-based dataset collection (same style as automated_dataset_generator.py):
-    python start_system.py --host 192.168.5.195 --port 1502 \\
-        --matlab-path "C:\\path\\to\\m\\files" --reuse-existing-matlab \\
-        --output run_01 --total 70 --attack 30 \\
+    python start_system.py --host 192.168.5.195 --port 1502 \
+        --matlab-path "C:\path\to\m\files" --reuse-existing-matlab \
+        --output run_01 --total 70 --attack 56 \
         --include-attacks reconnaissance,replay,ph_manipulation,slow_ramp
 
-    python start_system.py --host 192.168.5.195 --port 1502 \\
-        --matlab-path "C:\\path\\to\\m\\files" --reuse-existing-matlab \\
-        --output run_02 --total 70 --attack 30 \\
+    python start_system.py --host 192.168.5.195 --port 1502 \
+        --matlab-path "C:\path\to\m\files" --reuse-existing-matlab \
+        --output run_02 --total 70 --attack 56 \
         --include-attacks pump_failure,valve_manipulation,multi_stage
 
     (Repeat for run_03 ... run_05 with different --include-attacks)
 
 Output structure per run:
     run_01/
-      master_dataset.csv      ← logged sensor + coil data
-      attack_metadata.json    ← attack timestamps and labels
+      master_dataset.csv      <- logged sensor + coil data
+      attack_metadata.json    <- attack timestamps and labels
 
 Windows note:
     matlab.exe always opens a new console window and the launching process
@@ -212,22 +212,22 @@ def _launch_matlab(matlab_cmd: str, matlab_script: str,
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description='SWaT System Launcher — MATLAB ↔ Python ↔ CODESYS',
+        description='SWaT System Launcher - MATLAB <-> Python <-> CODESYS',
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog=r"""
 Examples
 --------
   Basic run (logs to complete_dataset/):
     python start_system.py --host 192.168.5.195 --port 1502 --reuse-existing-matlab
 
   Run 01 with specific attacks (auto-stops after 70 min):
-    python start_system.py --host 192.168.5.195 --port 1502 --reuse-existing-matlab \\
-        --output run_01 --total 70 --attack 30 \\
+    python start_system.py --host 192.168.5.195 --port 1502 --reuse-existing-matlab \
+        --output run_01 --total 70 --attack 56 \
         --include-attacks reconnaissance,replay,ph_manipulation,slow_ramp
 
   Run 02 with different attacks:
-    python start_system.py --host 192.168.5.195 --port 1502 --reuse-existing-matlab \\
-        --output run_02 --total 70 --attack 30 \\
+    python start_system.py --host 192.168.5.195 --port 1502 --reuse-existing-matlab \
+        --output run_02 --total 70 --attack 56 \
         --include-attacks pump_failure,valve_manipulation,multi_stage
 
 Available attacks (pass comma-separated to --include-attacks):
@@ -298,7 +298,7 @@ Available attacks (pass comma-separated to --include-attacks):
     meta_json  = run_dir / 'attack_metadata.json'
 
     print('=' * 60)
-    print('SWaT System Launcher — MATLAB ↔ Python ↔ CODESYS')
+    print('SWaT System Launcher - MATLAB <-> Python <-> CODESYS')
     print(f'Run folder  : {run_dir.resolve()}')
     if args.total:
         print(f'Duration    : {args.total} min total'

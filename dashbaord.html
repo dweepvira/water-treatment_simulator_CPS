@@ -423,6 +423,32 @@
       line-height: 1.5
     }
 
+    
+    /* Premium SCADA Components */
+    .inst { cursor: help; }
+    .inst-bg { fill: #f8fafc; stroke-width: 1.2; stroke: #94a3b8; transition: fill 0.3s, stroke 0.3s; }
+    .inst-line { stroke: #94a3b8; stroke-width: 0.8; }
+    .inst-top { font-size: 5px; fill: #1e293b; text-anchor: middle; font-weight: 700; transform: translateY(-1.5px); }
+    .inst-btm { font-size: 4px; fill: #64748b; text-anchor: middle; font-weight: 700; transform: translateY(4.5px); }
+    .inst-ok .inst-bg { stroke: #15803d; fill: #f0fdf4; }
+    .inst-warn .inst-bg { stroke: #d97706; fill: #fffbeb; }
+    .inst-alarm .inst-bg { stroke: #dc2626; fill: #fef2f2; }
+    .inst-blue .inst-bg { stroke: #1d4ed8; fill: #eff6ff; }
+    .inst-off .inst-bg { stroke: #cbd5e1; fill: #f1f5f9; }
+    .inst-on .inst-bg { stroke: #1d4ed8; fill: #dbeafe; }
+
+    .pmp { cursor: help; }
+    .pmp-bg { fill: #f1f5f9; stroke: #cbd5e1; stroke-width: 1.5; transition: fill 0.3s, stroke 0.3s; }
+    .pmp-arr { fill: #cbd5e1; transition: fill 0.3s; }
+    .pmp-on .pmp-bg { fill: #dbeafe; stroke: #1d4ed8; }
+    .pmp-on .pmp-arr { fill: #1d4ed8; }
+
+    .vlv { cursor: help; }
+    .vlv-body { fill: #f1f5f9; stroke: #94a3b8; stroke-width: 1.5; transition: fill 0.3s, stroke 0.3s; }
+    .vlv-stem { stroke: #94a3b8; stroke-width: 1.5; }
+    .vlv-o .vlv-body { fill: #dcfce7; stroke: #15803d; }
+    .vlv-o .vlv-stem { stroke: #15803d; }
+
     /* ── P&ID SVG classes ── */
     .pipe {
       fill: none;
@@ -714,61 +740,96 @@
           <!-- ══ STAGE 1 ══ -->
           <!-- Inlet pipe -->
           <line id="p-mv101" class="pipe flow" x1="90" y1="35" x2="90" y2="70" stroke="#3b82f6" stroke-width="3" />
-          <!-- MV-101: Gate valve symbol (two triangles pointing inward) -->
-          <g id="mv101" data-tip="MV-101  Inlet Motorised Valve" style="cursor:help">
-            <rect x="83" y="37" width="14" height="14" rx="2" class="valve-o" id="mv101-body" />
-            <polygon id="mv101-sym" points="85,38 90,45 85,51" class="valve-o" style="stroke:none;fill:#15803d" />
-            <polygon points="95,38 90,45 95,51" class="valve-o" style="stroke:none;fill:#15803d" />
-            <text
-              style="font-size:7px;fill:#166534;text-anchor:middle;font-family:'Segoe UI',sans-serif;font-weight:700"
-              x="90" y="57">MV101</text>
+          
+          <g id="grp-mv101" class="vlv vlv-o" transform="translate(90, 48)" data-tip="MV-101 Inlet Motorised Valve">
+            <polygon class="vlv-body" points="-7,-5 -7,5 7,-5 7,5" />
+            <line class="vlv-stem" x1="0" y1="0" x2="0" y2="-10" />
+            <rect class="vlv-body" x="-4" y="-14" width="8" height="4" />
+            <g transform="translate(16, -10)" class="inst inst-ok">
+              <rect x="-8" y="-5" width="16" height="10" rx="2" class="inst-bg" />
+              <text y="2.5" class="inst-top">MV101</text>
+            </g>
           </g>
+
           <!-- Tank 1 -->
           <rect x="60" y="70" width="60" height="120" rx="4" class="tank-bg" />
-          <rect id="w1" x="61" y="130" width="58" height="59" clip-path="url(#c1)" fill="#bfdbfe"
-            class="tank-water-blue" />
+          <rect id="w1" x="61" y="130" width="58" height="59" clip-path="url(#c1)" fill="#bfdbfe" class="tank-water-blue" />
           <rect x="60" y="70" width="60" height="120" rx="4" class="tank-shell" />
           <text class="val" id="tv-l1" x="90" y="140">500 L</text>
           <text class="lbl" x="90" y="200">T-101</text>
-          <!-- FIT-101 flow sensor (circle with F inside) -->
-          <circle class="sensor s-ok" id="d-fit101" cx="90" cy="60" r="5" data-tip="FIT-101 Inlet Flow (m³/h)" />
-          <text style="font-size:7px;fill:#1d4ed8;text-anchor:middle;font-family:'Segoe UI',sans-serif;font-weight:700"
-            x="90" y="57">F</text>
-          <text id="tv-fit101"
-            style="font-size:8px;fill:#1d4ed8;font-family:'Segoe UI',sans-serif;font-weight:700;text-anchor:start"
-            x="97" y="63">5.0</text>
+          
+          <!-- LIT-101 Mounted on tank -->
+          <g transform="translate(60, 70)">
+            <line stroke="#94a3b8" stroke-width="1" stroke-dasharray="2 2" x1="-12" y1="12" x2="0" y2="12" />
+            <line stroke="#94a3b8" stroke-width="1" x1="-12" y1="0" x2="-12" y2="12" />
+            <g id="d-lit101" class="inst inst-ok" transform="translate(-12, -8)" data-tip="LIT-101 Raw Water Tank Level">
+               <circle class="inst-bg" r="8" />
+               <line class="inst-line" x1="-8" y1="0" x2="8" y2="0" />
+               <text class="inst-top">LIT</text>
+               <text class="inst-btm">101</text>
+            </g>
+          </g>
+
+          <!-- FIT-101 flow sensor -->
+          <line stroke="#94a3b8" stroke-width="1" x1="90" y1="62" x2="114" y2="62" />
+          <g id="d-fit101" class="inst inst-ok" transform="translate(122, 62)" data-tip="FIT-101 Inlet Flow (m³/h)">
+             <circle class="inst-bg" r="8" />
+             <line class="inst-line" x1="-8" y1="0" x2="8" y2="0" />
+             <text class="inst-top">FIT</text>
+             <text class="inst-btm">101</text>
+             <text id="tv-fit101" x="12" y="3" style="font-size:7px;fill:#1d4ed8;font-weight:700">5.0</text>
+          </g>
+
           <!-- P101 Pump symbol -->
-          <g id="grp-p101" data-tip="P-101 Main Feed Pump" style="cursor:help">
-            <circle id="pb-p101" cx="78" cy="222" r="12" class="pump-body-on" />
-            <polygon id="pa-p101" points="72,218 72,226 84,222" class="pump-arrow-on" />
-            <text class="lbl" x="78" y="241">P-101</text>
+          <g id="grp-p101" class="pmp pmp-on" transform="translate(78, 222)" data-tip="P-101 Main Feed Pump">
+            <circle class="pmp-bg" r="12" />
+            <polygon class="pmp-arr" points="-5,-4 -5,4 6,0" />
+            <g transform="translate(0, 18)" class="inst inst-on">
+               <rect x="-8" y="-4" width="16" height="8" rx="2" class="inst-bg" />
+               <text y="2.5" class="inst-top">P-101</text>
+            </g>
           </g>
           <!-- P102 Pump symbol -->
-          <g id="grp-p102" data-tip="P-102 Booster Feed Pump" style="cursor:help">
-            <circle id="pb-p102" cx="108" cy="222" r="10" class="pump-body-off" />
-            <polygon id="pa-p102" points="103,218 103,226 113,222" class="pump-arrow-off" />
-            <text class="lbl" x="108" y="239">P-102</text>
+          <g id="grp-p102" class="pmp pmp-off" transform="translate(108, 222)" data-tip="P-102 Booster Pump">
+            <circle class="pmp-bg" r="10" />
+            <polygon class="pmp-arr" points="-4,-3 -4,3 5,0" />
+            <g transform="translate(0, 16)" class="inst inst-off">
+               <rect x="-8" y="-4" width="16" height="8" rx="2" class="inst-bg" />
+               <text y="2.5" class="inst-top">P-102</text>
+            </g>
           </g>
           <!-- Outlet pipe right -->
           <path id="p-s1out" class="pipe flow" d="M120 133 L156 133" stroke="#3b82f6" stroke-width="3"
             marker-end="url(#arr-b)" />
 
           <!-- ══ STAGE 2 ══ -->
-          <!-- AIT-202 pH sensor (diamond shape indicator) -->
-          <polygon id="d-ph" points="155,118 160,124 155,130 150,124" class="s-ok"
-            data-tip="AIT-202 pH sensor (×100 in register)" />
-          <text id="tv-ph2"
-            style="font-size:8px;fill:#15803d;font-family:'Segoe UI',sans-serif;font-weight:700;text-anchor:start"
-            x="163" y="127">7.20</text>
+          <!-- AIT-202 pH sensor -->
+          <line stroke="#94a3b8" stroke-width="1" x1="175" y1="122" x2="155" y2="122" />
+          <g id="d-ph" class="inst inst-ok" transform="translate(147, 122)" data-tip="AIT-202 pH sensor">
+             <circle class="inst-bg" r="8" />
+             <line class="inst-line" x1="-8" y1="0" x2="8" y2="0" />
+             <text class="inst-top">AIT</text>
+             <text class="inst-btm">202</text>
+             <text id="tv-ph2" x="-12" y="3" style="font-size:7px;fill:#15803d;font-weight:700;text-anchor:end">7.20</text>
+          </g>
           <!-- AIT-201 turbidity -->
-          <circle class="sensor s-ok" id="d-turb" cx="155" cy="147" r="4" data-tip="AIT-201 Turbidity (NTU)" />
-          <text id="tv-turb" style="font-size:8px;fill:#64748b;font-family:'Segoe UI',sans-serif;text-anchor:start"
-            x="161" y="150">450NTU</text>
+          <line stroke="#94a3b8" stroke-width="1" x1="175" y1="147" x2="155" y2="147" />
+          <g id="d-turb" class="inst inst-ok" transform="translate(147, 147)" data-tip="AIT-201 Turbidity (NTU)">
+             <circle class="inst-bg" r="8" />
+             <line class="inst-line" x1="-8" y1="0" x2="8" y2="0" />
+             <text class="inst-top">AIT</text>
+             <text class="inst-btm">201</text>
+             <text id="tv-turb" x="-12" y="3" style="font-size:7px;fill:#64748b;font-weight:700;text-anchor:end">450NTU</text>
+          </g>
           <!-- MV-201 gate valve -->
-          <g id="mv201" data-tip="MV-201  Stage-2 Feed Valve" style="cursor:help">
-            <rect x="161" y="127" width="14" height="12" rx="2" id="mv201-body" class="valve-o" />
-            <polygon points="162,128 168,133 162,139" style="stroke:none;fill:#15803d" />
-            <polygon points="174,128 168,133 174,139" style="stroke:none;fill:#15803d" />
+          <g id="grp-mv201" class="vlv vlv-o" transform="translate(175, 133)" data-tip="MV-201 Stage-2 Feed Valve">
+            <polygon class="vlv-body" points="-7,-5 -7,5 7,-5 7,5" />
+            <line class="vlv-stem" x1="0" y1="0" x2="0" y2="-10" />
+            <rect class="vlv-body" x="-4" y="-14" width="8" height="4" />
+            <g transform="translate(16, -10)" class="inst inst-ok">
+              <rect x="-8" y="-5" width="16" height="10" rx="2" class="inst-bg" />
+              <text y="2.5" class="inst-top">MV201</text>
+            </g>
           </g>
           <path id="p-s12" class="pipe flow" d="M175 133 L175 165 L181 165" stroke="#3b82f6" stroke-width="2.5"
             marker-end="url(#arr-b)" />
@@ -780,10 +841,13 @@
           <text class="val-sm" id="tv-acid" x="205" y="200" style="fill:#92400e">75%</text>
           <text class="lbl" x="205" y="240">Acid</text>
           <!-- P-203 pump -->
-          <g id="grp-p203" data-tip="P-203  Acid Dosing Pump" style="cursor:help">
-            <circle id="pb-p203" cx="205" cy="258" r="10" class="pump-body-on" />
-            <polygon id="pa-p203" points="200,254 200,262 210,258" class="pump-arrow-on" />
-            <text class="lbl" x="205" y="274">P-203</text>
+          <g id="grp-p203" class="pmp pmp-on" transform="translate(205, 258)" data-tip="P-203 Dosing Pump">
+            <circle class="pmp-bg" r="10" />
+            <polygon class="pmp-arr" points="-4,-3 -4,3 5,0" />
+            <g transform="translate(0, 16)" class="inst inst-on">
+               <rect x="-8" y="-4" width="16" height="8" rx="2" class="inst-bg" />
+               <text y="2.5" class="inst-top">P-203</text>
+            </g>
           </g>
           <!-- Cl2 tank -->
           <rect x="244" y="147" width="38" height="71" rx="3" fill="#f0fdf4" stroke="#86efac" stroke-width="1" />
@@ -807,16 +871,28 @@
             <polygon id="pa-p206" points="309,238 309,246 317,242" class="pump-arrow-off" />
             <text class="lbl" x="313" y="256">P-206</text>
           </g>
+          <!-- FIT-201 flow sensor -->
+          <line stroke="#94a3b8" stroke-width="1" x1="330" y1="165" x2="330" y2="155" />
+          <g id="d-fit201" class="inst inst-ok" transform="translate(330, 147)" data-tip="FIT-201 Stage 2 Outflow">
+             <circle class="inst-bg" r="8" />
+             <line class="inst-line" x1="-8" y1="0" x2="8" y2="0" />
+             <text class="inst-top">FIT</text>
+             <text class="inst-btm">201</text>
+          </g>
           <!-- Flow to S3 -->
           <path id="p-s23" class="pipe flow" d="M181 165 L345 165 L345 133 L373 133" stroke="#3b82f6" stroke-width="2.5"
             marker-end="url(#arr-b)" />
 
           <!-- ══ STAGE 3 ══ -->
           <!-- MV-301 gate valve -->
-          <g id="mv301" data-tip="MV-301  UF Permeate Valve" style="cursor:help">
-            <rect x="374" y="127" width="14" height="12" rx="2" id="mv301-body" class="valve-o" />
-            <polygon points="375,128 381,133 375,139" style="stroke:none;fill:#15803d" />
-            <polygon points="387,128 381,133 387,139" style="stroke:none;fill:#15803d" />
+          <g id="grp-mv301" class="vlv vlv-o" transform="translate(381, 133)" data-tip="MV-301 UF Permeate Valve">
+            <polygon class="vlv-body" points="-7,-5 -7,5 7,-5 7,5" />
+            <line class="vlv-stem" x1="0" y1="0" x2="0" y2="-10" />
+            <rect class="vlv-body" x="-4" y="-14" width="8" height="4" />
+            <g transform="translate(16, -10)" class="inst inst-ok">
+              <rect x="-8" y="-5" width="16" height="10" rx="2" class="inst-bg" />
+              <text y="2.5" class="inst-top">MV301</text>
+            </g>
           </g>
           <path id="p-s3in" class="pipe flow" d="M388 133 L388 71 L401 71" stroke="#3b82f6" stroke-width="2.5"
             marker-end="url(#arr-b)" />
@@ -825,6 +901,18 @@
           <rect id="w3" x="401" y="112" width="58" height="77" clip-path="url(#c3)" fill="#99f6e4"
             class="tank-water-teal" />
           <rect x="400" y="70" width="60" height="120" rx="4" class="tank-shell" stroke="#14b8a6" />
+          
+          <!-- LIT-301 Mounted on tank -->
+          <g transform="translate(400, 70)">
+            <line stroke="#94a3b8" stroke-width="1" stroke-dasharray="2 2" x1="-12" y1="12" x2="0" y2="12" />
+            <line stroke="#94a3b8" stroke-width="1" x1="-12" y1="0" x2="-12" y2="12" />
+            <g id="d-lit301" class="inst inst-ok" transform="translate(-12, -8)" data-tip="LIT-301 UF Feed Tank Level">
+               <circle class="inst-bg" r="8" />
+               <line class="inst-line" x1="-8" y1="0" x2="8" y2="0" />
+               <text class="inst-top">LIT</text>
+               <text class="inst-btm">301</text>
+            </g>
+          </g>
           <!-- UF Membrane -->
           <rect x="406" y="77" width="48" height="9" rx="2" class="mem" data-tip="UF Membrane (semi-permeable)" />
           <text style="font-size:7px;fill:#0e7490;text-anchor:middle;font-family:'Segoe UI',sans-serif;font-weight:600"
@@ -832,47 +920,43 @@
           <text class="val" id="tv-l3" x="430" y="132">800 L</text>
           <text class="lbl" x="430" y="200">T-301 (UF)</text>
           <!-- DPIT-301 pressure sensor -->
-          <polygon class="s-ok" id="d-dpit" points="462,104 467,111 462,118 457,111"
-            data-tip="DPIT-301 Trans-Membrane Pressure (kPa × 10 in register)" />
-          <text id="tv-dpit"
-            style="font-size:8px;fill:#0e7490;text-anchor:start;font-family:'Segoe UI',sans-serif;font-weight:700"
-            x="470" y="113">25 kPa</text>
-          <!-- P301 pump -->
-          <g id="grp-p301" data-tip="P-301  UF Feed Pump" style="cursor:help">
-            <circle id="pb-p301" cx="418" cy="222" r="12" class="pump-body-on" />
-            <polygon id="pa-p301" points="412,218 412,226 424,222" class="pump-arrow-on" />
-            <text class="lbl" x="418" y="241">P-301</text>
+          <line stroke="#94a3b8" stroke-width="1" x1="440" y1="84" x2="440" y2="105" />
+          <line stroke="#94a3b8" stroke-width="1" x1="410" y1="84" x2="410" y2="105" />
+          <line stroke="#94a3b8" stroke-width="1" x1="410" y1="105" x2="424" y2="105" />
+          <line stroke="#94a3b8" stroke-width="1" x1="440" y1="105" x2="440" y2="105" />
+          <g id="d-dpit" class="inst inst-ok" transform="translate(432, 105)" data-tip="DPIT-301 Trans-Membrane Pressure">
+             <circle class="inst-bg" r="8" />
+             <line class="inst-line" x1="-8" y1="0" x2="8" y2="0" />
+             <text class="inst-top">DPI</text>
+             <text class="inst-btm">301</text>
+             <text id="tv-dpit" x="12" y="3" style="font-size:7px;fill:#0e7490;font-weight:700">25 kPa</text>
           </g>
-          <!-- P602 backwash pump -->
-          <g id="grp-p602" data-tip="P-602  UF Backwash Pump (runs during backwash cycle)" style="cursor:help">
-            <circle id="pb-p602" cx="448" cy="222" r="10" class="pump-body-off" />
-            <polygon id="pa-p602" points="444,218 444,226 454,222" class="pump-arrow-off" />
-            <text class="lbl" x="448" y="238">P-602</text>
+          <g id="grp-p301" class="pmp pmp-on" transform="translate(418, 222)" data-tip="P-301 UF Feed Pump">
+            <circle class="pmp-bg" r="12" />
+            <polygon class="pmp-arr" points="-5,-4 -5,4 6,0" />
+            <g transform="translate(0, 18)" class="inst inst-on"><rect x="-8" y="-4" width="16" height="8" rx="2" class="inst-bg" /><text y="2.5" class="inst-top">P-301</text></g>
+          </g>
+          <g id="grp-p602" class="pmp pmp-off" transform="translate(448, 222)" data-tip="P-602 UF Backwash Pump">
+            <circle class="pmp-bg" r="10" />
+            <polygon class="pmp-arr" points="-4,-3 -4,3 5,0" />
+            <g transform="translate(0, 16)" class="inst inst-off"><rect x="-8" y="-4" width="16" height="8" rx="2" class="inst-bg" /><text y="2.5" class="inst-top">P-602</text></g>
           </g>
           <!-- UF Fouling bar -->
           <rect x="402" y="302" width="56" height="7" rx="3" fill="#f1f5f9" stroke="#e2e8f0" stroke-width=".5" />
           <rect id="uf-bar" x="402" y="302" width="0" height="7" rx="3" fill="#16a34a" />
           <text class="lbl" x="430" y="319">UF Fouling</text>
-          <!-- MV303 Backwash Inlet valve (normally closed, opens during BW) -->
-          <g id="mv303"
-            data-tip="MV-303  Backwash Water Inlet Valve (opens during UF backwash cycle — reverses flow through membrane)"
-            style="cursor:help">
-            <rect x="395" y="258" width="14" height="12" rx="2" id="mv303-body" class="valve-c" />
-            <polygon points="396,259 402,264 396,270" style="stroke:none;fill:#cbd5e1" id="mv303-sym" />
-            <polygon points="408,259 402,264 408,270" style="stroke:none;fill:#cbd5e1" />
+          <g id="grp-mv303" class="vlv vlv-c" transform="translate(402, 264)" data-tip="MV-303 BW Inlet">
+            <polygon class="vlv-body" points="-7,-5 -7,5 7,-5 7,5" />
+            <line class="vlv-stem" x1="0" y1="0" x2="0" y2="-10" />
+            <rect class="vlv-body" x="-4" y="-14" width="8" height="4" />
+            <text y="7" class="inst-btm">MV303</text>
           </g>
-          <text style="font-size:7px;fill:#64748b;text-anchor:middle;font-family:'Segoe UI',sans-serif" x="402"
-            y="280">BW IN</text>
-          <!-- MV304 Backwash Outlet valve -->
-          <g id="mv304"
-            data-tip="MV-304  Backwash Foulant Outlet Valve (opens during UF backwash — discharges foulants)"
-            style="cursor:help">
-            <rect x="454" y="258" width="14" height="12" rx="2" id="mv304-body" class="valve-c" />
-            <polygon points="455,259 461,264 455,270" style="stroke:none;fill:#cbd5e1" id="mv304-sym" />
-            <polygon points="467,259 461,264 467,270" style="stroke:none;fill:#cbd5e1" />
+          <g id="grp-mv304" class="vlv vlv-c" transform="translate(461, 264)" data-tip="MV-304 BW Outlet">
+            <polygon class="vlv-body" points="-7,-5 -7,5 7,-5 7,5" />
+            <line class="vlv-stem" x1="0" y1="0" x2="0" y2="-10" />
+            <rect class="vlv-body" x="-4" y="-14" width="8" height="4" />
+            <text y="7" class="inst-btm">MV304</text>
           </g>
-          <text style="font-size:7px;fill:#64748b;text-anchor:middle;font-family:'Segoe UI',sans-serif" x="461"
-            y="280">BW OUT</text>
           <!-- Backwash active alarm -->
           <g id="alm-bw" opacity="0">
             <rect x="380" y="284" width="100" height="13" rx="3" fill="#fff7ed" stroke="#fb923c" stroke-width="1" />
@@ -890,16 +974,11 @@
             data-tip="UV-401  UV Disinfection Unit" />
           <text style="font-size:8px;fill:#7c3aed;text-anchor:middle;font-family:'Segoe UI',sans-serif;font-weight:700"
             x="574" y="68">UV</text>
-          <!-- P-403 Bisulfate dosing (below pipe, Stage 4 — reduces Cl before RO) -->
-          <g id="grp-p403"
-            data-tip="P-403  Bisulfate Dosing Pump — reduces chlorine residual before RO membrane (Cl₂ destroys polyamide). Active when Chlorine_Residual > 20"
-            style="cursor:help">
-            <circle id="pb-p403" cx="545" cy="115" r="9" class="pump-body-on" />
-            <polygon id="pa-p403" points="541,111 541,119 550,115" class="pump-arrow-on" />
-            <text class="lbl" x="545" y="130">P-403</text>
-            <!-- Bisulfate dosing line into main pipe -->
-            <line class="pipe flow" x1="545" y1="106" x2="545" y2="100" stroke="#7c3aed" stroke-width="1.5"
-              marker-end="url(#arr-t)" />
+          <g id="grp-p403" class="pmp pmp-on" transform="translate(545, 115)" data-tip="P-403 Bisulfate Dosing Pump">
+            <circle class="pmp-bg" r="9" />
+            <polygon class="pmp-arr" points="-4,-3 -4,3 5,0" />
+            <line class="pipe flow" x1="0" y1="-9" x2="0" y2="-15" stroke="#7c3aed" stroke-width="1.5" marker-end="url(#arr-t)" />
+            <g transform="translate(18, 0)" class="inst inst-on"><rect x="-8" y="-4" width="16" height="8" rx="2" class="inst-bg" /><text y="2.5" class="inst-top">P-403</text></g>
           </g>
           <!-- Bisulfate tank (small) -->
           <rect x="533" y="135" width="24" height="30" rx="2" fill="#faf5ff" stroke="#d8b4fe" stroke-width="1" />
@@ -908,6 +987,18 @@
           <!-- Pipe in to S4 tank -->
           <path id="p-s4in" class="pipe flow" d="M564 100 L564 71 L581 71" stroke="#14b8a6" stroke-width="2.5"
             marker-end="url(#arr-t)" />
+          
+          <!-- LIT-401 Mounted on tank -->
+          <g transform="translate(580, 70)">
+            <line stroke="#94a3b8" stroke-width="1" stroke-dasharray="2 2" x1="-12" y1="12" x2="0" y2="12" />
+            <line stroke="#94a3b8" stroke-width="1" x1="-12" y1="0" x2="-12" y2="12" />
+            <g id="d-lit401" class="inst inst-ok" transform="translate(-12, -8)" data-tip="LIT-401 RO Feed Tank Level">
+               <circle class="inst-bg" r="8" />
+               <line class="inst-line" x1="-8" y1="0" x2="8" y2="0" />
+               <text class="inst-top">LIT</text>
+               <text class="inst-btm">401</text>
+            </g>
+          </g>
           <!-- DC Tank -->
           <rect x="580" y="70" width="60" height="120" rx="4" class="tank-bg" />
           <rect id="w4" x="581" y="115" width="58" height="74" clip-path="url(#c4)" fill="#99f6e4"
@@ -916,16 +1007,18 @@
           <text class="val" id="tv-l4" x="610" y="132">500 L</text>
           <text class="lbl" x="610" y="200">T-401 (DC)</text>
           <!-- AIT-402 ORP -->
-          <circle class="sensor s-ok" id="d-orp" cx="577" cy="115" r="4"
-            data-tip="AIT-402  ORP post-dechlorination (mV)" />
-          <text id="tv-orp"
-            style="font-size:8px;fill:#15803d;text-anchor:end;font-family:'Segoe UI',sans-serif;font-weight:700" x="574"
-            y="118">200mV</text>
-          <!-- P401 pump -->
-          <g id="grp-p401" data-tip="P-401  Dechlorination Transfer Pump" style="cursor:help">
-            <circle id="pb-p401" cx="610" cy="222" r="12" class="pump-body-on" />
-            <polygon id="pa-p401" points="604,218 604,226 616,222" class="pump-arrow-on" />
-            <text class="lbl" x="610" y="241">P-401</text>
+          <line stroke="#94a3b8" stroke-width="1" x1="565" y1="115" x2="565" y2="133" />
+          <g id="d-orp" class="inst inst-ok" transform="translate(565, 115)" data-tip="AIT-402 ORP">
+             <circle class="inst-bg" r="8" />
+             <line class="inst-line" x1="-8" y1="0" x2="8" y2="0" />
+             <text class="inst-top">AIT</text>
+             <text class="inst-btm">402</text>
+             <text id="tv-orp" x="-12" y="3" style="font-size:7px;fill:#15803d;font-weight:700;text-anchor:end">200mV</text>
+          </g>
+          <g id="grp-p401" class="pmp pmp-on" transform="translate(610, 222)" data-tip="P-401 Transfer Pump">
+            <circle class="pmp-bg" r="12" />
+            <polygon class="pmp-arr" points="-5,-4 -5,4 6,0" />
+            <g transform="translate(0, 18)" class="inst inst-on"><rect x="-8" y="-4" width="16" height="8" rx="2" class="inst-bg" /><text y="2.5" class="inst-top">P-401</text></g>
           </g>
           <!-- Pipe to S5 -->
           <path id="p-s45" class="pipe flow" d="M640 133 L703 133" stroke="#14b8a6" stroke-width="2.5"
@@ -933,16 +1026,18 @@
 
           <!-- ══ STAGE 5 ══ -->
           <!-- PIT-501 pressure sensor -->
-          <polygon class="sensor s-ok" id="d-pit501" points="702,118 707,125 702,132 697,125"
-            data-tip="PIT-501  RO Feed Pressure (bar × 10 in register). ST alarm: PIT_501 > 1800 (18 bar)" />
-          <text id="tv-pit"
-            style="font-size:8px;fill:#1d4ed8;text-anchor:end;font-family:'Segoe UI',sans-serif;font-weight:700" x="699"
-            y="127">12.0 bar</text>
-          <!-- P501 HP pump -->
-          <g id="grp-p501" data-tip="P-501  RO High-Pressure Pump" style="cursor:help">
-            <circle id="pb-p501" cx="716" cy="133" r="13" class="pump-body-on" />
-            <polygon id="pa-p501" points="710,129 710,137 723,133" class="pump-arrow-on" />
-            <text class="lbl" x="716" y="153">P-501</text>
+          <line stroke="#94a3b8" stroke-width="1" x1="702" y1="133" x2="702" y2="105" />
+          <g id="d-pit501" class="inst inst-ok" transform="translate(702, 97)" data-tip="PIT-501 RO Feed Pressure">
+             <circle class="inst-bg" r="8" />
+             <line class="inst-line" x1="-8" y1="0" x2="8" y2="0" />
+             <text class="inst-top">PIT</text>
+             <text class="inst-btm">501</text>
+             <text id="tv-pit" x="12" y="3" style="font-size:7px;fill:#1d4ed8;font-weight:700">12.0 bar</text>
+          </g>
+          <g id="grp-p501" class="pmp pmp-on" transform="translate(716, 133)" data-tip="P-501 RO High-Pressure Pump">
+            <circle class="pmp-bg" r="13" />
+            <polygon class="pmp-arr" points="-6,-5 -6,5 7,0" />
+            <g transform="translate(0, 19)" class="inst inst-on"><rect x="-8" y="-4" width="16" height="8" rx="2" class="inst-bg" /><text y="2.5" class="inst-top">P-501</text></g>
           </g>
           <!-- Feed pipe to RO -->
           <path id="p-ro-in" class="pipe flow" d="M729 133 L734 133" stroke="#14b8a6" stroke-width="2.5" />
@@ -971,12 +1066,22 @@
             y="130">Brine</text>
           <text style="font-size:7px;fill:#94a3b8;font-family:'Segoe UI',sans-serif" x="885" y="139">to drain</text>
           <!-- TDS + FIT502 sensors -->
-          <circle class="sensor s-ok" id="d-tds" cx="845" cy="172" r="4" data-tip="AIT-501 / TDS Permeate (mg/L)" />
-          <text id="tv-tds"
-            style="font-size:8px;fill:#16a34a;text-anchor:start;font-family:'Segoe UI',sans-serif;font-weight:700"
-            x="851" y="175">50 mg/L</text>
-          <text id="tv-fit502" style="font-size:8px;fill:#64748b;font-family:'Segoe UI',sans-serif" x="851"
-            y="185">FIT-502: 4.0</text>
+          <line stroke="#94a3b8" stroke-width="1" x1="845" y1="172" x2="880" y2="172" />
+          <g id="d-tds" class="inst inst-ok" transform="translate(888, 172)" data-tip="AIT-501 TDS Permeate">
+             <circle class="inst-bg" r="8" />
+             <line class="inst-line" x1="-8" y1="0" x2="8" y2="0" />
+             <text class="inst-top">AIT</text>
+             <text class="inst-btm">501</text>
+             <text id="tv-tds" x="12" y="3" style="font-size:7px;fill:#16a34a;font-weight:700">50 mg/L</text>
+          </g>
+          <line stroke="#94a3b8" stroke-width="1" x1="845" y1="190" x2="880" y2="190" />
+          <g id="d-fit502" class="inst inst-ok" transform="translate(888, 190)" data-tip="FIT-502 RO Permeate Flow">
+             <circle class="inst-bg" r="8" />
+             <line class="inst-line" x1="-8" y1="0" x2="8" y2="0" />
+             <text class="inst-top">FIT</text>
+             <text class="inst-btm">502</text>
+             <text id="tv-fit502" x="12" y="3" style="font-size:7px;fill:#64748b;font-weight:700">4.0</text>
+          </g>
           <!-- RO fouling bar -->
           <rect x="735" y="192" width="98" height="7" rx="3" fill="#f1f5f9" stroke="#e2e8f0" stroke-width=".5" />
           <rect id="ro-bar" x="735" y="192" width="0" height="7" rx="3" fill="#1d4ed8" />
@@ -1000,15 +1105,15 @@
             marker-end="url(#arr-g)" />
 
           <!-- ══ STAGE 6 ══ -->
-          <g id="grp-p601" data-tip="P-601  Distribution Pump A" style="cursor:help">
-            <circle id="pb-p601" cx="925" cy="163" r="11" class="pump-body-on" />
-            <polygon id="pa-p601" points="919,159 919,167 931,163" class="pump-arrow-on" />
-            <text class="lbl" x="925" y="181">P-601</text>
+          <g id="grp-p601" class="pmp pmp-on" transform="translate(925, 163)" data-tip="P-601 Distribution Pump A">
+            <circle class="pmp-bg" r="11" />
+            <polygon class="pmp-arr" points="-5,-4 -5,4 6,0" />
+            <g transform="translate(0, 17)" class="inst inst-on"><rect x="-8" y="-4" width="16" height="8" rx="2" class="inst-bg" /><text y="2.5" class="inst-top">P-601</text></g>
           </g>
-          <g id="grp-p603" data-tip="P-603  Distribution Pump B" style="cursor:help">
-            <circle id="pb-p603" cx="951" cy="163" r="11" class="pump-body-off" />
-            <polygon id="pa-p603" points="945,159 945,167 957,163" class="pump-arrow-off" />
-            <text class="lbl" x="951" y="181">P-603</text>
+          <g id="grp-p603" class="pmp pmp-off" transform="translate(951, 163)" data-tip="P-603 Distribution Pump B">
+            <circle class="pmp-bg" r="11" />
+            <polygon class="pmp-arr" points="-5,-4 -5,4 6,0" />
+            <g transform="translate(0, 17)" class="inst inst-off"><rect x="-8" y="-4" width="16" height="8" rx="2" class="inst-bg" /><text y="2.5" class="inst-top">P-603</text></g>
           </g>
           <!-- Distribution header -->
           <rect x="966" y="138" width="90" height="50" rx="6" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5" />
@@ -1017,11 +1122,14 @@
           <text style="font-size:9px;fill:#14532d;text-anchor:middle;font-family:'Segoe UI',sans-serif;font-weight:700"
             x="1011" y="170">Header</text>
           <!-- FIT-601 -->
-          <circle class="sensor s-ok" id="d-fit601" cx="962" cy="138" r="4"
-            data-tip="FIT-601  Distribution Flow (m³/h)" />
-          <text id="tv-fit601"
-            style="font-size:8px;fill:#15803d;text-anchor:end;font-family:'Segoe UI',sans-serif;font-weight:700" x="959"
-            y="132">4.0 m³/h</text>
+          <line stroke="#94a3b8" stroke-width="1" x1="1000" y1="163" x2="1000" y2="138" />
+          <g id="d-fit601" class="inst inst-ok" transform="translate(1000, 130)" data-tip="FIT-601 Distribution Flow">
+             <circle class="inst-bg" r="8" />
+             <line class="inst-line" x1="-8" y1="0" x2="8" y2="0" />
+             <text class="inst-top">FIT</text>
+             <text class="inst-btm">601</text>
+             <text id="tv-fit601" x="12" y="3" style="font-size:7px;fill:#15803d;font-weight:700">4.0 m³/h</text>
+          </g>
           <path class="pipe flow" d="M962 163 L966 163" stroke="#16a34a" stroke-width="2.5" />
           <path class="pipe flow" d="M1056 163 L1068 163" stroke="#16a34a" stroke-width="2.5"
             marker-end="url(#arr-g)" />
@@ -1318,22 +1426,22 @@
       t('tv-orp', S.AIT_402 + ' mV');
       t('tv-pit', (S.PIT_501 / 10).toFixed(1) + ' bar');
       t('tv-tds', S.TDS_Permeate + ' mg/L');
-      t('tv-fit502', 'FIT-502: ' + (S.FIT_502 / 10).toFixed(1));
+      t('tv-fit502', (S.FIT_502 / 10).toFixed(1));
       t('tv-fit601', (S.FIT_601 / 10).toFixed(1) + ' m³/h');
       // Pumps (circle + triangle)
-      pump('pb-p101', 'pa-p101', S.P_101); pump('pb-p102', 'pa-p102', S.P_102);
-      pump('pb-p203', 'pa-p203', S.P_203); pump('pb-p205', 'pa-p205', S.P_205);
-      pump('pb-p206', 'pa-p206', S.P_206);
-      pump('pb-p301', 'pa-p301', S.P_301); pump('pb-p602', 'pa-p602', S.P_602 || S.UF_Backwash_Active);
-      pump('pb-p403', 'pa-p403', S.P_403); pump('pb-p401', 'pa-p401', S.P_401);
-      pump('pb-p501', 'pa-p501', S.P_501); pump('pb-p601', 'pa-p601', S.P_601);
-      pump('pb-p603', 'pa-p603', S.P_603);
+      pump('grp-p101', S.P_101); pump('grp-p102', S.P_102);
+      pump('grp-p203', S.P_203); pump('grp-p205', S.P_205);
+      pump('grp-p206', S.P_206);
+      pump('grp-p301', S.P_301); pump('grp-p602', S.P_602 || S.UF_Backwash_Active);
+      pump('grp-p403', S.P_403); pump('grp-p401', S.P_401);
+      pump('grp-p501', S.P_501); pump('grp-p601', S.P_601);
+      pump('grp-p603', S.P_603);
       // Valves (body + triangle fill)
-      valve('mv101-body', 'mv101-sym', S.MV_101 > 0);
-      valve('mv201-body', null, S.MV_201 > 0);
-      valve('mv301-body', null, S.MV_301 > 0);
-      valve('mv303-body', 'mv303-sym', S.MV_303 > 0);
-      valve('mv304-body', 'mv304-sym', S.MV_304 > 0);
+      valve('grp-mv101', S.MV_101 > 0);
+      valve('grp-mv201', S.MV_201 > 0);
+      valve('grp-mv301', S.MV_301 > 0);
+      valve('grp-mv303', S.MV_303 > 0);
+      valve('grp-mv304', S.MV_304 > 0);
       // UV
       const uv = ge('uv401'); if (uv) uv.style.opacity = S.UV_401 ? 1 : 0.35;
       // Pipe flows
@@ -1350,6 +1458,11 @@
       pf('p-s56', S.P_601, '#16a34a');
       // Sensor dot status
       sd('d-fit101', S.FIT_101 < 0.5 ? 'warn' : 'ok');
+      sd('d-lit101', S.LIT_101 > 950 ? 'alarm' : S.LIT_101 < 100 ? 'warn' : 'ok');
+      sd('d-lit301', S.LIT_301 > 950 ? 'alarm' : S.LIT_301 < 100 ? 'warn' : 'ok');
+      sd('d-lit401', S.LIT_401 > 950 ? 'alarm' : S.LIT_401 < 100 ? 'warn' : 'ok');
+      sd('d-fit201', 'ok');
+      sd('d-fit502', 'ok');
       sd('d-ph', pH < 6 || pH > 9 ? 'alarm' : pH < 6.5 || pH > 8.5 ? 'warn' : 'ok');
       sd('d-turb', S.AIT_201 > 700 ? 'warn' : 'ok');
       sd('d-dpit', S.DPIT_301 > 600 ? 'alarm' : S.DPIT_301 > 400 ? 'warn' : 'ok');
@@ -1401,15 +1514,13 @@
       const h = Math.max(1, frac * mH);
       e.setAttribute('height', h); e.setAttribute('y', tb - h);
     }
-    function pump(bodyId, arrowId, on) {
-      const b = ge(bodyId), a = arrowId ? ge(arrowId) : null;
-      if (b) b.className.baseVal = on ? 'pump-body-on' : 'pump-body-off';
-      if (a) a.className.baseVal = on ? 'pump-arrow-on' : 'pump-arrow-off';
+    function pump(grpId, on) {
+      const e = ge(grpId);
+      if (e) e.className.baseVal = 'pmp ' + (on ? 'pmp-on' : 'pmp-off');
     }
-    function valve(bodyId, symId, open) {
-      const b = ge(bodyId), s = symId ? ge(symId) : null;
-      if (b) b.className.baseVal = open ? 'valve-o' : 'valve-c';
-      if (s) s.style.fill = open ? '#15803d' : '#cbd5e1';
+    function valve(grpId, open) {
+      const e = ge(grpId);
+      if (e) e.className.baseVal = 'vlv ' + (open ? 'vlv-o' : 'vlv-c');
     }
     function pf(id, flowing, col) {
       const e = ge(id); if (!e) return;
@@ -1418,7 +1529,7 @@
     }
     function sd(id, status) {
       const e = ge(id); if (!e) return;
-      e.className.baseVal = 'sensor s-' + status;
+      e.className.baseVal = 'inst inst-' + status;
     }
     function alm(id, active) { const e = ge(id); if (e) e.style.opacity = active ? 1 : 0; }
     function bar(id, val, maxW, col) {

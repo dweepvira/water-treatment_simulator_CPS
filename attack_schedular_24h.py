@@ -67,48 +67,48 @@ ATTACK_PROFILES: Dict[str, Dict] = {
     # ── Temporal / process ────────────────────────────────────────────────
     'ph_manipulation': {
         'id': 11, 'name': 'pH Manipulation Attack', 'mitre': 'T0836',
-        'min': 600, 'max': 900, 'cooldown': 600,
+        'min': 600, 'max': 900, 'cooldown': 120,
         'category': 'temporal',
     },
     'slow_ramp': {
         'id': 12, 'name': 'Slow Ramp Attack', 'mitre': 'T0832',
-        'min': 600, 'max': 900, 'cooldown': 600,
+        'min': 600, 'max': 900, 'cooldown': 120,
         'category': 'temporal',
     },
     'membrane_damage': {
         'id': 10, 'name': 'Membrane Damage Attack', 'mitre': 'T0816',
-        'min': 600, 'max': 900, 'cooldown': 900,
+        'min': 600, 'max': 900, 'cooldown': 120,
         'category': 'temporal',
     },
     'chemical_depletion': {
         'id': 9, 'name': 'Chemical Depletion Attack', 'mitre': 'T0809',
-        'min': 600, 'max': 900, 'cooldown': 900,
+        'min': 600, 'max': 900, 'cooldown': 120,
         'category': 'temporal',
     },
     'tank_overflow': {
         'id': 8, 'name': 'Tank Overflow Attack', 'mitre': 'T0815',
-        'min': 600, 'max': 900, 'cooldown': 900,
+        'min': 600, 'max': 900, 'cooldown': 120,
         'category': 'temporal',
     },
     'valve_manipulation': {
         'id': 16, 'name': 'Valve Manipulation Attack', 'mitre': 'T0836',
-        'min': 600, 'max': 900, 'cooldown': 600,
+        'min': 600, 'max': 900, 'cooldown': 120,
         'category': 'temporal',
     },
     # ── Network ───────────────────────────────────────────────────────────
     'reconnaissance': {
         'id': 13, 'name': 'Reconnaissance Scan', 'mitre': 'T0840',
-        'min': 420, 'max': 600, 'cooldown': 300,
+        'min': 420, 'max': 600, 'cooldown': 60,
         'category': 'network',
     },
     'dos_flood': {
         'id': 14, 'name': 'Denial of Service', 'mitre': 'T0814',
-        'min': 420, 'max': 600, 'cooldown': 300,
+        'min': 420, 'max': 600, 'cooldown': 60,
         'category': 'network',
     },
     'replay': {
         'id': 15, 'name': 'Replay Attack', 'mitre': 'T0839',
-        'min': 420, 'max': 600, 'cooldown': 300,
+        'min': 420, 'max': 600, 'cooldown': 60,
         'category': 'network',
     },
 }
@@ -116,8 +116,8 @@ ATTACK_PROFILES: Dict[str, Dict] = {
 # Normal gap between attack windows (seconds)
 # These are defaults — pass --min-gap / --max-gap on CLI to override.
 # For short test runs (< 30 min) use: --min-gap 60 --max-gap 120
-NORMAL_GAP_MIN = 120   # 2 min (reduced from 5 min so attacks fire in short runs)
-NORMAL_GAP_MAX = 600   # 10 min (reduced from 20 min)
+NORMAL_GAP_MIN = 30    # 0.5 min (reduced to get 80% attack density)
+NORMAL_GAP_MAX = 180   # 3 min (reduced to get 80% attack density)
 
 # Multi-stage chains — list of attack sequences with inter-stage gaps
 # Each stage: (attack_type, gap_after_seconds)
