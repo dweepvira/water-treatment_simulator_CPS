@@ -1,0 +1,1314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SWaT ML Anomaly Detection — Live Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* :root {
+      --bg:        #0b0f1a;
+      --bg2:       #111827;
+      --bg3:       #1a2235;
+      --border:    #1e2d47;
+      --text:      #e2e8f0;
+      --text2:     #94a3b8;
+      --text3:     #475569;
+      --accent:    #3b82f6;
+      --accent2:   #6366f1;
+      --ok:        #10b981;
+      --warn:      #f59e0b;
+      --alarm:     #ef4444;
+      --purple:    #8b5cf6;
+      --teal:      #14b8a6;
+      --radius:    10px;
+    } */
+     :root {
+        /* Backgrounds: From Lightest to Slightly Grayer */
+        --bg:        #ffffff; /* Pure white main background */
+        --bg2:       #f8fafc; /* Very light gray for sidebars/cards */
+        --bg3:       #f1f5f9; /* Slightly darker gray for hovering/sections */
+        
+        /* Borders and Dividers */
+        --border:    #e2e8f0; /* Subtle border color */
+        
+        /* Text: High Contrast for Readability */
+        --text:      #0f172a; /* Near-black for main headings/body */
+        --text2:     #475569; /* Slate gray for secondary text */
+        --text3:     #94a3b8; /* Lighter gray for disabled or captions */
+        
+        /* Accents and Status */
+        --accent:    #2563eb; /* Primary Blue (darkened slightly for light bg) */
+        --accent2:   #4f46e5; /* Indigo */
+        --ok:        #059669; /* Emerald Green */
+        --warn:      #d97706; /* Amber/Orange */
+        --alarm:     #dc2626; /* Deep Red */
+        --purple:    #7c3aed; /* Violet */
+        --teal:      #0d9488; /* Darker Teal */
+        
+        --radius:    10px;
+      }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Top bar ─────────────────────────────────────────────────────────── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 24px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+    }
+
+    .topbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+
+    .brand-title { font-size: 15px; font-weight: 700; color: var(--text); }
+    .brand-sub   { font-size: 10px; color: var(--text2); letter-spacing: .5px; margin-top: 1px; }
+
+    .topbar-status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 14px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .5px;
+      border: 1.5px solid;
+      transition: all .3s;
+    }
+
+    .badge-normal { color: var(--ok);    border-color: var(--ok);    background: rgba(16,185,129,.1); }
+    .badge-attack { color: var(--alarm); border-color: var(--alarm); background: rgba(239,68,68,.1);
+                    animation: flash-border 1s ease-in-out infinite; }
+    .badge-warn   { color: var(--warn);  border-color: var(--warn);  background: rgba(245,158,11,.1); }
+
+    @keyframes flash-border {
+      0%,100% { box-shadow: 0 0 6px rgba(239,68,68,.4); }
+      50%      { box-shadow: 0 0 18px rgba(239,68,68,.8); }
+    }
+
+    .led {
+      width: 8px; height: 8px; border-radius: 50%;
+      animation: led-pulse 2s ease-in-out infinite;
+    }
+    .led-ok   { background: var(--ok);    box-shadow: 0 0 6px var(--ok); }
+    .led-alarm{ background: var(--alarm); box-shadow: 0 0 6px var(--alarm); animation: led-fast 0.6s ease-in-out infinite; }
+    .led-off  { background: var(--text3); box-shadow: none; animation: none; }
+
+    @keyframes led-pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    @keyframes led-fast  { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+    .ws-pill {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 10px; color: var(--text2);
+      padding: 4px 10px; border-radius: 12px;
+      background: var(--bg3); border: 1px solid var(--border);
+    }
+
+    /* ── Layout ──────────────────────────────────────────────────────────── */
+    .main {
+      display: grid;
+      grid-template-columns: 280px 1fr 320px;
+      height: calc(100vh - 60px);
+      gap: 0;
+    }
+
+    /* ── Sidebar left — Attack Injection ─────────────────────────────────── */
+    .sidebar-left {
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .sb-section {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sb-title {
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+      display: flex; align-items: center; gap: 6px;
+    }
+
+    /* Attack selector */
+    .attack-selector {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .attack-opt {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      border: 1.5px solid transparent;
+      background: var(--bg3);
+      transition: all .2s;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .attack-opt:hover { border-color: var(--border); background: #1e2d47; }
+
+    .attack-opt.selected {
+      border-color: var(--alarm);
+      background: rgba(239,68,68,.08);
+    }
+
+    .attack-opt.selected .ao-dot { background: var(--alarm); box-shadow: 0 0 8px var(--alarm); }
+
+    .ao-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--text3);
+      flex-shrink: 0;
+      transition: all .2s;
+    }
+
+    .ao-name  { color: var(--text); flex: 1; }
+    .ao-id    { font-size: 9px; color: var(--text3); font-family: 'JetBrains Mono', monospace; }
+
+    .normal-opt .ao-dot { background: var(--ok); }
+    .normal-opt { border-color: transparent; }
+    .normal-opt.selected { border-color: var(--ok); background: rgba(16,185,129,.08); }
+
+    /* Inject / Clear buttons */
+    .btn-inject {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .4px;
+      transition: all .2s;
+      margin-top: 10px;
+    }
+
+    .btn-inject-attack {
+      background: linear-gradient(135deg, #dc2626, #ef4444);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(220,38,38,.3);
+    }
+    .btn-inject-attack:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(220,38,38,.5); }
+
+    .btn-inject-clear {
+      background: var(--bg3);
+      color: var(--ok);
+      border: 1.5px solid var(--ok);
+      margin-top: 6px;
+    }
+    .btn-inject-clear:hover { background: rgba(16,185,129,.1); }
+
+    .ws-connect-row {
+      display: flex; gap: 6px;
+    }
+    .ws-url-input {
+      flex: 1;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 6px 8px;
+      outline: none;
+    }
+    .ws-url-input:focus { border-color: var(--accent); }
+
+    .btn-sm {
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      color: var(--text);
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all .15s;
+    }
+    .btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-sm.active { border-color: var(--alarm); color: var(--alarm); }
+
+    /* Event log */
+    .elog {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+      min-height: 100px;
+      max-height: 260px;
+    }
+
+    .ev {
+      display: flex; gap: 8px; align-items: flex-start;
+      padding: 5px 16px;
+      border-bottom: 1px solid rgba(30,45,71,.5);
+      font-size: 10px;
+      line-height: 1.4;
+    }
+    .ev-t  { color: var(--text3); min-width: 52px; font-family: 'JetBrains Mono', monospace; flex-shrink: 0; }
+    .ev-m  { color: var(--text2); }
+    .ev.crit .ev-m { color: var(--alarm); font-weight: 600; }
+    .ev.warn .ev-m { color: var(--warn);  font-weight: 600; }
+    .ev.info .ev-m { color: var(--ok);    }
+
+    /* ── Centre — ML Results ─────────────────────────────────────────────── */
+    .centre {
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Verdict hero card */
+    .verdict-hero {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px 28px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color .3s;
+    }
+
+    .verdict-hero.is-attack {
+      border-color: var(--alarm);
+      background: linear-gradient(135deg, rgba(239,68,68,.06), var(--bg2));
+    }
+
+    .verdict-hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, transparent 60%, rgba(59,130,246,.03));
+      pointer-events: none;
+    }
+
+    .verdict-icon {
+      font-size: 52px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .verdict-text-group { flex: 1; }
+
+    .verdict-label {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -.5px;
+      line-height: 1;
+      transition: color .3s;
+    }
+    .verdict-label.normal  { color: var(--ok); }
+    .verdict-label.attack  { color: var(--alarm); }
+    .verdict-label.warmup  { color: var(--text2); }
+
+    .verdict-sublabel {
+      font-size: 13px;
+      color: var(--text2);
+      margin-top: 6px;
+      font-weight: 500;
+    }
+
+    .verdict-meta {
+      font-size: 11px;
+      color: var(--text3);
+      margin-top: 4px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .prob-big {
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .prob-val {
+      font-size: 48px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+      transition: color .3s;
+    }
+    .prob-val.high  { color: var(--alarm); }
+    .prob-val.mid   { color: var(--warn); }
+    .prob-val.low   { color: var(--ok); }
+
+    .prob-label { font-size: 10px; color: var(--text2); text-align: center; margin-top: 4px; letter-spacing:.4px; }
+
+    /* Layer cards */
+    .layer-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .layer-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      transition: border-color .3s;
+    }
+
+    .layer-card.flagged { border-color: var(--alarm); }
+    .layer-card.clear   { border-color: var(--ok); }
+
+    .layer-title {
+      font-size: 9px;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: .9px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .layer-flag {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+    .flag-ok  { background: rgba(16,185,129,.15); color: var(--ok); }
+    .flag-alm { background: rgba(239,68,68,.15);  color: var(--alarm); }
+
+    .layer-score {
+      font-size: 32px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.1;
+      transition: color .3s;
+    }
+
+    .layer-bar-track {
+      height: 5px;
+      background: var(--bg3);
+      border-radius: 3px;
+      margin: 8px 0 4px;
+      overflow: hidden;
+    }
+    .layer-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width .5s ease, background .3s;
+    }
+
+    .layer-sub { font-size: 9px; color: var(--text3); }
+
+    /* Anomaly score chart */
+    .chart-panel {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+
+    .chart-panel-hdr {
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: .9px;
+      margin-bottom: 12px;
+    }
+
+    /* Vote bar */
+    .vote-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .vote-cell {
+      flex: 1;
+      background: var(--bg3);
+      border: 1.5px solid var(--border);
+      border-radius: 6px;
+      padding: 8px;
+      text-align: center;
+      font-size: 9px;
+      color: var(--text3);
+      transition: all .3s;
+    }
+
+    .vote-cell.active {
+      border-color: var(--alarm);
+      background: rgba(239,68,68,.1);
+      color: var(--alarm);
+    }
+
+    .vote-val {
+      font-size: 22px;
+      font-weight: 800;
+      display: block;
+      line-height: 1.2;
+    }
+
+    /* ── Right sidebar — Sensor Data ─────────────────────────────────────── */
+    .sidebar-right {
+      background: var(--bg2);
+      border-left: 1px solid var(--border);
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sensor-section {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sensor-section-title {
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: .9px;
+      margin-bottom: 10px;
+    }
+
+    .sensor-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 0;
+      border-bottom: 1px solid rgba(30,45,71,.5);
+      font-size: 11px;
+    }
+    .sensor-row:last-child { border-bottom: none; }
+
+    .sensor-name { color: var(--text2); font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+    .sensor-val  { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
+    .sensor-val.alarm { color: var(--alarm); }
+    .sensor-val.warn  { color: var(--warn); }
+    .sensor-val.ok    { color: var(--ok); }
+
+    /* Actuator coil chips */
+    .coil-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+    }
+
+    .coil-chip {
+      padding: 5px 4px;
+      border-radius: 5px;
+      text-align: center;
+      font-size: 8px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      border: 1px solid;
+      transition: all .25s;
+      letter-spacing: .2px;
+    }
+
+    .coil-on  { background: rgba(59,130,246,.12); border-color: rgba(59,130,246,.4); color: #60a5fa; }
+    .coil-off { background: var(--bg3); border-color: var(--border); color: var(--text3); }
+
+    /* ── Footer bar ──────────────────────────────────────────────────────── */
+    .footer {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 24px;
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      font-size: 9px;
+      color: var(--text3);
+      font-family: 'JetBrains Mono', monospace;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 50;
+    }
+
+    .footer-sep { margin: 0 6px; color: var(--border); }
+  </style>
+</head>
+
+<body>
+
+<!-- Top bar -->
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="brand-icon">🛡️</div>
+    <div>
+      <div class="brand-title">SWaT ML Anomaly Detection</div>
+      <div class="brand-sub">3-LAYER ENSEMBLE · ISOLATION FOREST → XGBOOST → LSTM</div>
+    </div>
+  </div>
+  <div class="topbar-status">
+    <div class="ws-pill">
+      <div class="led led-off" id="ws-led"></div>
+      <span id="ws-lbl">Disconnected</span>
+    </div>
+    <div class="status-badge badge-normal" id="verdict-badge">
+      <div class="led led-ok" id="verdict-led"></div>
+      <span id="verdict-badge-txt">NORMAL</span>
+    </div>
+  </div>
+</div>
+
+<!-- Main layout -->
+<div class="main">
+
+  <!-- ── LEFT SIDEBAR: Attack Injection ─────────────────────────────────── -->
+  <div class="sidebar-left">
+
+    <!-- WebSocket connect -->
+    <div class="sb-section">
+      <div class="sb-title">🔌 ML Server Connection</div>
+      <div class="ws-connect-row">
+        <input class="ws-url-input" id="ws-url" type="text" value="ws://localhost:8766" />
+        <button class="btn-sm" id="ws-btn" onclick="toggleWS()">Connect</button>
+      </div>
+      <div style="font-size:9px;color:var(--text3);margin-top:8px;" id="ws-status-txt">
+        Run: <code style="color:var(--accent)">python swat_realtime_inference.py</code>
+      </div>
+    </div>
+
+    <!-- Attack selector -->
+    <div class="sb-section">
+      <div class="sb-title">⚡ Attack Injection</div>
+      <div class="attack-selector" id="attack-selector">
+
+        <div class="attack-opt normal-opt selected" data-attack="Normal" onclick="selectAttack(this)">
+          <div class="ao-dot"></div>
+          <span class="ao-name">Normal Operation</span>
+          <span class="ao-id">ID:0</span>
+        </div>
+
+        <div class="attack-opt" data-attack="Reconnaissance" onclick="selectAttack(this)">
+          <div class="ao-dot"></div>
+          <span class="ao-name">Reconnaissance</span>
+          <span class="ao-id">ID:1</span>
+        </div>
+
+        <div class="attack-opt" data-attack="Replay Attack" onclick="selectAttack(this)">
+          <div class="ao-dot"></div>
+          <span class="ao-name">Replay Attack</span>
+          <span class="ao-id">ID:2</span>
+        </div>
+
+        <div class="attack-opt" data-attack="pH Manipulation" onclick="selectAttack(this)">
+          <div class="ao-dot"></div>
+          <span class="ao-name">pH Manipulation</span>
+          <span class="ao-id">ID:3</span>
+        </div>
+
+        <div class="attack-opt" data-attack="Slow Ramp" onclick="selectAttack(this)">
+          <div class="ao-dot"></div>
+          <span class="ao-name">Slow Ramp</span>
+          <span class="ao-id">ID:4</span>
+        </div>
+
+        <div class="attack-opt" data-attack="Pump Failure" onclick="selectAttack(this)">
+          <div class="ao-dot"></div>
+          <span class="ao-name">Pump Failure</span>
+          <span class="ao-id">ID:5</span>
+        </div>
+
+        <div class="attack-opt" data-attack="Valve Manipulation" onclick="selectAttack(this)">
+          <div class="ao-dot"></div>
+          <span class="ao-name">Valve Manipulation</span>
+          <span class="ao-id">ID:6</span>
+        </div>
+
+        <div class="attack-opt" data-attack="Multi-Stage" onclick="selectAttack(this)">
+          <div class="ao-dot"></div>
+          <span class="ao-name">Multi-Stage</span>
+          <span class="ao-id">ID:7</span>
+        </div>
+
+        <div class="attack-opt" data-attack="Sensor Spoofing" onclick="selectAttack(this)">
+          <div class="ao-dot"></div>
+          <span class="ao-name">Sensor Spoofing</span>
+          <span class="ao-id">ID:8</span>
+        </div>
+
+        <div class="attack-opt" data-attack="DoS Attack" onclick="selectAttack(this)">
+          <div class="ao-dot"></div>
+          <span class="ao-name">DoS Attack</span>
+          <span class="ao-id">ID:9</span>
+        </div>
+
+        <div class="attack-opt" data-attack="Covert Channel" onclick="selectAttack(this)">
+          <div class="ao-dot"></div>
+          <span class="ao-name">Covert Channel</span>
+          <span class="ao-id">ID:10</span>
+        </div>
+      </div>
+
+      <button class="btn-inject btn-inject-attack" id="btn-inject" onclick="injectAttack()">
+        ⚡ Inject Selected Attack
+      </button>
+      <button class="btn-inject btn-inject-clear" onclick="clearAttack()">
+        ✅ Clear / Return to Normal
+      </button>
+      <div style="font-size:9px;color:var(--text3);margin-top:8px;text-align:center;line-height:1.5" id="inject-status">
+        Select an attack and click Inject
+      </div>
+    </div>
+
+    <!-- Event log -->
+    <div class="sb-section" style="flex:1;display:flex;flex-direction:column;min-height:0;padding-bottom:0">
+      <div class="sb-title">📋 Event Log</div>
+      <div class="elog" id="elog"></div>
+    </div>
+
+  </div>
+
+  <!-- ── CENTRE: ML Results ──────────────────────────────────────────────── -->
+  <div class="centre">
+
+    <!-- Verdict hero -->
+    <div class="verdict-hero" id="verdict-hero">
+      <div class="verdict-icon" id="verdict-icon">🔵</div>
+      <div class="verdict-text-group">
+        <div class="verdict-label warmup" id="verdict-label">Connecting...</div>
+        <div class="verdict-sublabel" id="verdict-sub">Waiting for ML server</div>
+        <div class="verdict-meta" id="verdict-meta">—</div>
+      </div>
+      <div class="prob-big">
+        <div class="prob-val low" id="prob-val">—</div>
+        <div class="prob-label">ATTACK PROBABILITY</div>
+      </div>
+    </div>
+
+    <!-- Vote indicator -->
+    <div class="chart-panel" style="padding:14px 16px">
+      <div class="chart-panel-hdr">🗳️ Majority Vote (≥ 2 of 3 layers must flag)</div>
+      <div class="vote-row">
+        <div class="vote-cell" id="vote-l1">
+          <span class="vote-val" id="vote-l1-val">0</span>
+          Layer 1 · IF
+        </div>
+        <div class="vote-cell" id="vote-l2">
+          <span class="vote-val" id="vote-l2-val">0</span>
+          Layer 2 · XGB
+        </div>
+        <div class="vote-cell" id="vote-l3">
+          <span class="vote-val" id="vote-l3-val">0</span>
+          Layer 3 · LSTM
+        </div>
+        <div style="font-size:22px;color:var(--text3);flex-shrink:0">=</div>
+        <div class="vote-cell" id="vote-total" style="flex:1.4">
+          <span class="vote-val" id="vote-total-val">0/3</span>
+          Total Votes
+        </div>
+      </div>
+    </div>
+
+    <!-- Layer cards -->
+    <div class="layer-grid">
+
+      <!-- Layer 1: Isolation Forest -->
+      <div class="layer-card" id="card-l1">
+        <div class="layer-title">
+          LAYER 1 · ISOLATION FOREST
+          <span class="layer-flag flag-ok" id="flag-l1">PASS</span>
+        </div>
+        <div class="layer-score" id="score-l1" style="color:var(--ok)">0.00</div>
+        <div class="layer-bar-track">
+          <div class="layer-bar-fill" id="bar-l1"
+               style="width:0%;background:var(--ok)"></div>
+        </div>
+        <div class="layer-sub">Anomaly score — threshold: <span id="thresh-l1">0.60</span></div>
+      </div>
+
+      <!-- Layer 2: XGBoost -->
+      <div class="layer-card" id="card-l2">
+        <div class="layer-title">
+          LAYER 2 · XGBOOST
+          <span class="layer-flag flag-ok" id="flag-l2">PASS</span>
+        </div>
+        <div class="layer-score" id="score-l2" style="color:var(--ok)">0.00</div>
+        <div class="layer-bar-track">
+          <div class="layer-bar-fill" id="bar-l2"
+               style="width:0%;background:var(--ok)"></div>
+        </div>
+        <div class="layer-sub">Attack probability — threshold: <span id="thresh-l2">0.50</span></div>
+      </div>
+
+      <!-- Layer 3: LSTM -->
+      <div class="layer-card" id="card-l3">
+        <div class="layer-title">
+          LAYER 3 · LSTM (BI-DIR)
+          <span class="layer-flag flag-ok" id="flag-l3">PASS</span>
+        </div>
+        <div class="layer-score" id="score-l3" style="color:var(--ok)">0.00</div>
+        <div class="layer-bar-track">
+          <div class="layer-bar-fill" id="bar-l3"
+               style="width:0%;background:var(--ok)"></div>
+        </div>
+        <div class="layer-sub">Sequence attack prob (30-step window)</div>
+      </div>
+
+    </div>
+
+    <!-- Time-series chart -->
+    <div class="chart-panel" style="flex:1;min-height:220px">
+      <div class="chart-panel-hdr">📈 Attack Probability — Real-Time (Last 120 s)</div>
+      <canvas id="prob-chart" style="width:100%;height:180px"></canvas>
+    </div>
+
+  </div>
+
+  <!-- ── RIGHT SIDEBAR: Live Sensor Data ────────────────────────────────── -->
+  <div class="sidebar-right">
+
+    <div class="sensor-section">
+      <div class="sensor-section-title">📡 Tank Levels</div>
+
+      <div class="sensor-row">
+        <span class="sensor-name">LIT-101</span>
+        <span class="sensor-val" id="sv-lit101">—</span>
+      </div>
+      <div class="sensor-row">
+        <span class="sensor-name">LIT-301</span>
+        <span class="sensor-val" id="sv-lit301">—</span>
+      </div>
+      <div class="sensor-row">
+        <span class="sensor-name">LIT-401</span>
+        <span class="sensor-val" id="sv-lit401">—</span>
+      </div>
+      <div class="sensor-row">
+        <span class="sensor-name">LIT-501</span>
+        <span class="sensor-val" id="sv-lit501">—</span>
+      </div>
+    </div>
+
+    <div class="sensor-section">
+      <div class="sensor-section-title">🌊 Flow & Pressure</div>
+
+      <div class="sensor-row">
+        <span class="sensor-name">FIT-101</span>
+        <span class="sensor-val" id="sv-fit101">—</span>
+      </div>
+      <div class="sensor-row">
+        <span class="sensor-name">FIT-201</span>
+        <span class="sensor-val" id="sv-fit201">—</span>
+      </div>
+      <div class="sensor-row">
+        <span class="sensor-name">FIT-301</span>
+        <span class="sensor-val" id="sv-fit301">—</span>
+      </div>
+      <div class="sensor-row">
+        <span class="sensor-name">DPIT-301</span>
+        <span class="sensor-val" id="sv-dpit301">—</span>
+      </div>
+      <div class="sensor-row">
+        <span class="sensor-name">PIT-501</span>
+        <span class="sensor-val" id="sv-pit501">—</span>
+      </div>
+      <div class="sensor-row">
+        <span class="sensor-name">PIT-502</span>
+        <span class="sensor-val" id="sv-pit502">—</span>
+      </div>
+    </div>
+
+    <div class="sensor-section">
+      <div class="sensor-section-title">🧪 Chemistry</div>
+
+      <div class="sensor-row">
+        <span class="sensor-name">AIT-202 (pH)</span>
+        <span class="sensor-val" id="sv-ait202">—</span>
+      </div>
+      <div class="sensor-row">
+        <span class="sensor-name">AIT-203</span>
+        <span class="sensor-val" id="sv-ait203">—</span>
+      </div>
+      <div class="sensor-row">
+        <span class="sensor-name">Cl₂ Residual</span>
+        <span class="sensor-val" id="sv-cl2">—</span>
+      </div>
+    </div>
+
+    <div class="sensor-section">
+      <div class="sensor-section-title">⚙️ Actuators</div>
+      <div class="coil-grid" id="coil-grid">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+
+    <div class="sensor-section">
+      <div class="sensor-section-title">⏱️ Statistics</div>
+      <div class="sensor-row">
+        <span class="sensor-name">Frames received</span>
+        <span class="sensor-val" id="stat-frames">0</span>
+      </div>
+      <div class="sensor-row">
+        <span class="sensor-name">Detections (attack)</span>
+        <span class="sensor-val alarm" id="stat-detections">0</span>
+      </div>
+      <div class="sensor-row">
+        <span class="sensor-name">Last update</span>
+        <span class="sensor-val" id="stat-ts">—</span>
+      </div>
+      <div class="sensor-row">
+        <span class="sensor-name">LSTM buffer</span>
+        <span class="sensor-val" id="stat-buffer">—</span>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <span>SWaT Digital Twin</span>
+  <span class="footer-sep">|</span>
+  <span>ML Server: <span id="footer-ws">ws://localhost:8766</span></span>
+  <span class="footer-sep">|</span>
+  <span>Digital Twin Stream: ws://localhost:8765</span>
+  <span class="footer-sep">|</span>
+  <span id="footer-status">Not connected</span>
+</div>
+
+<script>
+/* ============================================================
+   State
+   ============================================================ */
+let ws = null;
+let selectedAttack = 'Normal';
+let detectionCount = 0;
+let frameCount     = 0;
+let probHistory    = [];   // {t, prob, is_attack}
+const MAX_HIST     = 1200; // 120 s at 10 Hz
+
+/* ============================================================
+   Chart.js — attack probability time-series
+   ============================================================ */
+const ctx = document.getElementById('prob-chart').getContext('2d');
+const probChart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      {
+        label: 'Ensemble Attack Prob',
+        data: [],
+        borderColor: '#3b82f6',
+        backgroundColor: 'rgba(59,130,246,.08)',
+        borderWidth: 1.5,
+        pointRadius: 0,
+        fill: true,
+        tension: 0.3,
+      },
+      {
+        label: 'XGBoost',
+        data: [],
+        borderColor: '#8b5cf6',
+        borderWidth: 1,
+        pointRadius: 0,
+        fill: false,
+        tension: 0.3,
+        borderDash: [],
+      },
+      {
+        label: 'LSTM',
+        data: [],
+        borderColor: '#14b8a6',
+        borderWidth: 1,
+        pointRadius: 0,
+        fill: false,
+        tension: 0.3,
+      },
+    ],
+  },
+  options: {
+    animation: false,
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: {
+        display: false,
+      },
+      y: {
+        min: 0, max: 1,
+        ticks: { color: '#475569', font: { size: 9 }, stepSize: 0.25 },
+        grid:  { color: 'rgba(30,45,71,.6)' },
+      },
+    },
+    plugins: {
+      legend: {
+        labels: { color: '#94a3b8', font: { size: 9 }, boxWidth: 10, padding: 12 },
+      },
+      tooltip: { enabled: false },
+    },
+  },
+});
+
+/* ============================================================
+   WebSocket
+   ============================================================ */
+function toggleWS() {
+  const btn = document.getElementById('ws-btn');
+  if (ws && ws.readyState <= 1) {
+    ws.close();
+    btn.textContent = 'Connect';
+    btn.classList.remove('active');
+    return;
+  }
+  const url = document.getElementById('ws-url').value.trim();
+  connectWS(url);
+}
+
+function connectWS(url) {
+  try {
+    ws = new WebSocket(url);
+
+    ws.onopen = () => {
+      document.getElementById('ws-led').className    = 'led led-ok';
+      document.getElementById('ws-lbl').textContent  = 'Live';
+      document.getElementById('ws-btn').textContent  = 'Disconnect';
+      document.getElementById('ws-btn').classList.add('active');
+      document.getElementById('ws-status-txt').textContent = 'Connected to ML server ✅';
+      document.getElementById('footer-ws').textContent = url;
+      document.getElementById('footer-status').textContent = 'ML server connected';
+      logEv('Connected to ML inference server', 'info');
+    };
+
+    ws.onmessage = ev => {
+      try {
+        const d = JSON.parse(ev.data);
+        if (d.type === 'ack') { handleAck(d); return; }
+        if (d.type === 'pong') return;
+        handleMLResult(d);
+      } catch (e) {}
+    };
+
+    ws.onclose = () => {
+      document.getElementById('ws-led').className   = 'led led-off';
+      document.getElementById('ws-lbl').textContent = 'Disconnected';
+      document.getElementById('ws-btn').textContent = 'Connect';
+      document.getElementById('ws-btn').classList.remove('active');
+      document.getElementById('footer-status').textContent = 'Disconnected — retry';
+      logEv('WebSocket closed. Reconnecting...', 'warn');
+      setTimeout(() => connectWS(url), 3000);
+    };
+
+    ws.onerror = () => logEv('WebSocket error — is swat_realtime_inference.py running?', 'crit');
+
+  } catch (e) {
+    logEv('Invalid WebSocket URL', 'crit');
+  }
+}
+
+function send(obj) {
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
+}
+
+/* ============================================================
+   ML Result handler
+   ============================================================ */
+function handleMLResult(d) {
+  frameCount++;
+
+  // ── Verdict hero ───────────────────────────────────────────────────────
+  const hero    = document.getElementById('verdict-hero');
+  const icon    = document.getElementById('verdict-icon');
+  const label   = document.getElementById('verdict-label');
+  const sub     = document.getElementById('verdict-sub');
+  const meta    = document.getElementById('verdict-meta');
+  const probEl  = document.getElementById('prob-val');
+  const badge   = document.getElementById('verdict-badge');
+  const badgeTxt= document.getElementById('verdict-badge-txt');
+  const badgeLed= document.getElementById('verdict-led');
+
+  if (!d.ready) {
+    // Still warming up (LSTM buffer not full)
+    label.textContent  = 'Warming Up...';
+    label.className    = 'verdict-label warmup';
+    icon.textContent   = '⏳';
+    sub.textContent    = 'LSTM sequence buffer filling...';
+    probEl.textContent = '—';
+    probEl.className   = 'prob-val low';
+    document.getElementById('stat-buffer').textContent = 'Filling...';
+  } else {
+    const atkProb = d.attack_prob || 0;
+    const pct     = (atkProb * 100).toFixed(1);
+
+    if (d.is_attack) {
+      detectionCount++;
+      label.textContent  = d.attack_name || 'ATTACK DETECTED';
+      label.className    = 'verdict-label attack';
+      sub.textContent    = `${d.verdict} — Vote: ${d.vote_sum}/3 layers flagged`;
+      icon.textContent   = '🚨';
+      hero.classList.add('is-attack');
+      badge.className    = 'status-badge badge-attack';
+      badgeTxt.textContent = '⚡ ATTACK';
+      badgeLed.className = 'led led-alarm';
+      probEl.className   = 'prob-val high';
+    } else {
+      label.textContent  = 'Normal';
+      label.className    = 'verdict-label normal';
+      sub.textContent    = `System operating normally — Vote: ${d.vote_sum}/3`;
+      icon.textContent   = '🛡️';
+      hero.classList.remove('is-attack');
+      badge.className    = 'status-badge badge-normal';
+      badgeTxt.textContent = 'NORMAL';
+      badgeLed.className = 'led led-ok';
+      probEl.className   = atkProb > 0.4 ? 'prob-val mid' : 'prob-val low';
+    }
+
+    probEl.textContent = pct + '%';
+    meta.textContent   = `IF:${(d.layer1_score||0).toFixed(3)}  XGB:${(d.layer2_prob||0).toFixed(3)}  LSTM:${(d.layer3_prob||0).toFixed(3)}  |  ${d.timestamp || ''}`;
+    document.getElementById('stat-buffer').textContent = 'Ready ✅';
+
+    // ── Layer cards ──────────────────────────────────────────────────────
+    updateLayer('l1', d.layer1_score || 0, d.layer1_flag || 0, 'Anomaly score');
+    updateLayer('l2', d.layer2_prob  || 0, d.layer2_flag || 0, 'Attack prob');
+    updateLayer('l3', d.layer3_prob  || 0, d.layer3_flag || 0, 'Seq attack prob');
+
+    // ── Vote cells ───────────────────────────────────────────────────────
+    updateVote('vote-l1', d.layer1_flag || 0, 'Layer 1 · IF');
+    updateVote('vote-l2', d.layer2_flag || 0, 'Layer 2 · XGB');
+    updateVote('vote-l3', d.layer3_flag || 0, 'Layer 3 · LSTM');
+    const totalEl = document.getElementById('vote-total');
+    const totalValEl = document.getElementById('vote-total-val');
+    totalValEl.textContent = `${d.vote_sum}/3`;
+    totalEl.className = d.vote_sum >= 2 ? 'vote-cell active' : 'vote-cell';
+
+    // ── Chart ────────────────────────────────────────────────────────────
+    probHistory.push({
+      t: d.timestamp || '',
+      prob: atkProb,
+      xgb:  d.layer2_prob || 0,
+      lstm: d.layer3_prob || 0,
+    });
+    if (probHistory.length > MAX_HIST) probHistory.shift();
+
+    // Update chart every 5 frames for performance
+    if (frameCount % 5 === 0) {
+      const labels   = probHistory.map(p => p.t);
+      probChart.data.labels               = labels;
+      probChart.data.datasets[0].data     = probHistory.map(p => p.prob);
+      probChart.data.datasets[1].data     = probHistory.map(p => p.xgb);
+      probChart.data.datasets[2].data     = probHistory.map(p => p.lstm);
+      probChart.update('none');
+    }
+  }
+
+  // ── Sensor data ─────────────────────────────────────────────────────────
+  const s = d.sensor_data || {};
+  const sv = (id, val, unit='', alarmFn=null) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (val === undefined || val === null) { el.textContent = '—'; return; }
+    const formatted = typeof val === 'number' ? val.toFixed(1) : String(val);
+    el.textContent  = formatted + unit;
+    if (alarmFn) {
+      el.className = 'sensor-val ' + alarmFn(val);
+    } else {
+      el.className = 'sensor-val';
+    }
+  };
+
+  sv('sv-lit101',  s['LIT_101'],  ' L',   v => v > 900 || v < 100 ? 'alarm' : v > 800 ? 'warn' : 'ok');
+  sv('sv-lit301',  s['LIT_301'],  ' L',   v => v > 1200 || v < 200 ? 'alarm' : 'ok');
+  sv('sv-lit401',  s['LIT_401'],  ' L',   v => v > 1000 ? 'alarm' : 'ok');
+  sv('sv-lit501',  s['LIT_501'],  ' L',   v => v > 800  ? 'alarm' : 'ok');
+  sv('sv-fit101',  s['FIT_101'],  ' m³/h');
+  sv('sv-fit201',  s['FIT_201'],  ' m³/h');
+  sv('sv-fit301',  s['FIT_301'],  ' m³/h');
+  sv('sv-dpit301', s['DPIT_301'], ' Pa');
+  sv('sv-pit501',  s['PIT_501'],  ' Pa',  v => v > 1800 ? 'alarm' : v > 1600 ? 'warn' : 'ok');
+  sv('sv-pit502',  s['PIT_502'],  ' Pa');
+  sv('sv-ait202',  s['AIT_202'] !== undefined ? (s['AIT_202'] / 100) : undefined, ' pH',
+     v => v < 6.0 || v > 9.0 ? 'alarm' : v < 6.5 || v > 8.5 ? 'warn' : 'ok');
+  sv('sv-ait203',  s['AIT_203'],  '');
+  sv('sv-cl2',     s['Chlorine_Residual'], ' mg/L', v => v < 10 ? 'alarm' : v < 20 ? 'warn' : 'ok');
+
+  // Actuator chips
+  const coilMap = {
+    'P-101': s['P_101'], 'P-102': s['P_102'],
+    'P-301': s['P_301'], 'P-501': s['P_501'],
+    'MV-101': s['MV_101'], 'MV-201': s['MV_201'],
+    'MV-301': s['MV_301'], 'MV-501': s['MV_501'],
+  };
+  const grid = document.getElementById('coil-grid');
+  if (grid && Object.keys(coilMap).some(k => coilMap[k] !== undefined)) {
+    grid.innerHTML = Object.entries(coilMap).map(([name, val]) => {
+      const on = Boolean(val);
+      return `<div class="coil-chip ${on ? 'coil-on' : 'coil-off'}">${name}<br>${on ? 'ON' : 'OFF'}</div>`;
+    }).join('');
+  }
+
+  // Stats
+  document.getElementById('stat-frames').textContent     = frameCount.toLocaleString();
+  document.getElementById('stat-detections').textContent = detectionCount.toLocaleString();
+  document.getElementById('stat-ts').textContent        = d.timestamp || '—';
+  document.getElementById('footer-status').textContent  = `Frames: ${frameCount} | Detections: ${detectionCount}`;
+}
+
+/* ============================================================
+   Layer card update
+   ============================================================ */
+function updateLayer(id, score, flagged, subLabel) {
+  const card    = document.getElementById('card-'  + id);
+  const scoreEl = document.getElementById('score-' + id);
+  const barEl   = document.getElementById('bar-'   + id);
+  const flagEl  = document.getElementById('flag-'  + id);
+
+  const pct     = Math.min(100, score * 100).toFixed(0);
+  const color   = score > 0.7 ? 'var(--alarm)' : score > 0.4 ? 'var(--warn)' : 'var(--ok)';
+
+  scoreEl.textContent = score.toFixed(3);
+  scoreEl.style.color  = color;
+  barEl.style.width    = pct + '%';
+  barEl.style.background = color;
+
+  if (flagged) {
+    card.className = 'layer-card flagged';
+    flagEl.textContent  = 'FLAGGED';
+    flagEl.className    = 'layer-flag flag-alm';
+  } else {
+    card.className = 'layer-card clear';
+    flagEl.textContent  = 'PASS';
+    flagEl.className    = 'layer-flag flag-ok';
+  }
+}
+
+/* ============================================================
+   Vote cell update
+   ============================================================ */
+function updateVote(id, flagged, label) {
+  const cell = document.getElementById(id);
+  const val  = document.getElementById(id + '-val');
+  if (!cell || !val) return;
+  val.textContent = flagged ? '1' : '0';
+  cell.className  = flagged ? 'vote-cell active' : 'vote-cell';
+}
+
+/* ============================================================
+   Attack injection
+   ============================================================ */
+function selectAttack(el) {
+  document.querySelectorAll('.attack-opt').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedAttack = el.dataset.attack;
+  document.getElementById('inject-status').textContent = `Selected: ${selectedAttack}`;
+  const btn = document.getElementById('btn-inject');
+  if (selectedAttack === 'Normal') {
+    btn.textContent = '✅ Apply Normal State';
+    btn.style.background = 'linear-gradient(135deg,#059669,#10b981)';
+  } else {
+    btn.textContent = '⚡ Inject: ' + selectedAttack;
+    btn.style.background = 'linear-gradient(135deg,#dc2626,#ef4444)';
+  }
+}
+
+function injectAttack() {
+  if (!ws || ws.readyState !== 1) {
+    logEv('Not connected to ML server — cannot inject attack', 'crit');
+    return;
+  }
+  send({ action: 'inject_attack', attack_name: selectedAttack });
+  logEv(`Attack injection sent: ${selectedAttack}`, selectedAttack === 'Normal' ? 'info' : 'crit');
+  document.getElementById('inject-status').textContent = `Sent: ${selectedAttack} — awaiting ACK`;
+}
+
+function clearAttack() {
+  if (!ws || ws.readyState !== 1) {
+    logEv('Not connected — cannot clear attack', 'warn'); return;
+  }
+  send({ action: 'clear_attack' });
+  // Also deselect any attack, revert to Normal
+  document.querySelectorAll('.attack-opt').forEach(o => o.classList.remove('selected'));
+  const normalOpt = document.querySelector('[data-attack="Normal"]');
+  if (normalOpt) selectAttack(normalOpt);
+  logEv('Clear attack sent', 'info');
+}
+
+function handleAck(d) {
+  const ok  = d.success;
+  const msg = `${d.action} — ${d.attack_name || ''} : ${ok ? 'OK ✅' : 'FAILED ❌'}`;
+  logEv(msg, ok ? 'info' : 'crit');
+  document.getElementById('inject-status').textContent = msg;
+}
+
+/* ============================================================
+   Event log
+   ============================================================ */
+function logEv(msg, cls='info') {
+  const log = document.getElementById('elog');
+  const d   = new Date();
+  const ts  = [d.getHours(), d.getMinutes(), d.getSeconds()]
+              .map(n => String(n).padStart(2,'0')).join(':');
+  const el  = document.createElement('div');
+  el.className = `ev ${cls}`;
+  el.innerHTML = `<span class="ev-t">${ts}</span><span class="ev-m">${msg}</span>`;
+  log.insertBefore(el, log.firstChild);
+  if (log.children.length > 80) log.removeChild(log.lastChild);
+}
+
+/* ============================================================
+   Init
+   ============================================================ */
+logEv('Dashboard initialised — waiting for connection', 'info');
+
+// Auto-connect after 500 ms
+setTimeout(() => {
+  const url = document.getElementById('ws-url').value.trim();
+  connectWS(url);
+}, 500);
+</script>
+
+</body>
+</html>
