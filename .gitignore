@@ -16,3 +16,7 @@ logs/
 *.ipynb
 runs/
 ml_output/
+cuda_setup_guide.md
+models/
+plots/
+scripts/
