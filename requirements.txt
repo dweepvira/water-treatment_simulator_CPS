@@ -1,57 +1,23 @@
 # =============================================================================
-# SWaT Digital Twin — Python Dependencies
+# SWaT PyTorch CNN+BiLSTM Ensemble — Python Dependencies
 # =============================================================================
-# Python version : 3.10.x  (REQUIRED — see CUDA_SETUP_GUIDE.md)
-# TensorFlow     : 2.10.1  (last version with native Windows GPU support)
-# CUDA Toolkit   : 11.2    (exact — TF 2.10 requires this)
-# cuDNN          : 8.1.x   (exact — pairs with CUDA 11.2)
-# GPU tested     : NVIDIA GeForce GT 730 (Compute Capability 3.5 / Kepler)
-# OS             : Windows 11 x64
-#
-# INSTALL ORDER:
-#   1. Install Python 3.10.x from python.org (NOT from Microsoft Store)
-#   2. Install CUDA 11.2 Toolkit
-#   3. Install cuDNN 8.1 for CUDA 11.2
-#   4. Create conda/venv with Python 3.10
-#   5. pip install -r requirements.txt
-#
-# See CUDA_SETUP_GUIDE.md for full step-by-step instructions.
+# Python : 3.10.x
+# PyTorch: 2.1.2 CPU (GT 730 CC3.5 unsupported in PyTorch>=1.5 CUDA)
+# For GPU (better than GT730): pip install torch==2.1.2+cu118 --index-url https://download.pytorch.org/whl/cu118
 # =============================================================================
 
-# ── Core scientific stack ──────────────────────────────────────────────────────
-numpy==1.23.5           # TF 2.10 requires <1.24 — do NOT upgrade
+# ── PyTorch (CPU build — GT 730 compatible) ───────────────────────────────────
+torch==2.1.2
+torchvision==0.16.2
+
+# ── Core scientific stack ─────────────────────────────────────────────────────
+numpy==1.26.4            # no numpy<1.24 constraint (TF removed)
 scipy==1.11.4
 pandas==2.1.4
 scikit-learn==1.3.2
 
-# ── TensorFlow GPU (native Windows — LAST version to support GPU on Windows) ──
-tensorflow==2.10.1
-keras==2.10.0
-tensorboard==2.10.1
-tensorboard-data-server==0.6.1
-tensorboard-plugin-wit==1.8.1
-tensorflow-estimator==2.10.0
-tensorflow-io-gcs-filesystem==0.27.0  # must match TF 2.10 on Windows
-
-# ── TensorFlow internals (pinned to match 2.10.1) ─────────────────────────────
-absl-py==1.4.0
-astunparse==1.6.3
-flatbuffers==23.5.26
-gast==0.4.0
-google-pasta==0.2.0
-grpcio==1.51.3
-h5py==3.9.0
-Keras-Preprocessing==1.1.2
-libclang==16.0.6
-ml-dtypes==0.2.0
-opt_einsum==3.3.0
-protobuf==3.19.6
-termcolor==2.3.0
-wrapt==1.14.1
-typing_extensions==4.8.0
-
-# ── ML / Model libraries ──────────────────────────────────────────────────────
-xgboost==2.0.3          # last version where device='cuda' + CUDA 11.2 works cleanly
+# ── ML libraries ──────────────────────────────────────────────────────────────
+xgboost==2.0.3           # CPU mode
 shap==0.43.0
 imbalanced-learn==0.11.0
 joblib==1.3.2
@@ -72,28 +38,19 @@ idna==3.6
 urllib3==2.1.0
 requests==2.31.0
 
-# ── Authentication (TensorBoard) ───────────────────────────────────────────────
-google-auth==2.27.0
-google-auth-oauthlib==0.4.6
-oauthlib==3.2.2
-requests-oauthlib==1.3.1
-pyasn1==0.5.1
-pyasn1-modules==0.3.0
-rsa==4.9
-cachetools==5.3.2
-
-# ── Web / networking (dashboard + inference server) ────────────────────────────
-websockets==12.0         # stable async WebSocket library
-aiohttp==3.9.3           # optional — alternative HTTP server for inference API
-Werkzeug==3.0.1
-Markdown==3.5.2
-MarkupSafe==2.1.5
-
-# ── CODESYS / Modbus (attack injection) ───────────────────────────────────────
-pymodbus==3.6.9          # Modbus TCP for CODESYS communication
-pyserial==3.5            # optional — serial Modbus support
+# ── ICS / Modbus (attack injection — optional) ────────────────────────────────
+pymodbus==3.6.9
+pyserial==3.5
+websockets==12.0
+aiohttp==3.9.3
 
 # ── Cryptography ──────────────────────────────────────────────────────────────
 cryptography==42.0.5
 cffi==1.16.0
 pycparser==2.21
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+jupyter==1.0.0
+ipykernel==6.29.0
+nbformat==5.9.2
+
