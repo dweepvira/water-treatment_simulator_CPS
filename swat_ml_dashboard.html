@@ -4,53 +4,31 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>SWaT ML Anomaly Detection — Live Dashboard</title>
+  <meta name="description" content="Real-time ML-based anomaly detection dashboard for Secure Water Treatment (SWaT) cyber-physical system">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
-    /* :root {
-      --bg:        #0b0f1a;
-      --bg2:       #111827;
-      --bg3:       #1a2235;
-      --border:    #1e2d47;
-      --text:      #e2e8f0;
-      --text2:     #94a3b8;
-      --text3:     #475569;
-      --accent:    #3b82f6;
-      --accent2:   #6366f1;
-      --ok:        #10b981;
-      --warn:      #f59e0b;
-      --alarm:     #ef4444;
-      --purple:    #8b5cf6;
-      --teal:      #14b8a6;
+    :root {
+      --bg:        #ffffff;
+      --bg2:       #f8fafc;
+      --bg3:       #f1f5f9;
+      --border:    #e2e8f0;
+      --text:      #0f172a;
+      --text2:     #475569;
+      --text3:     #94a3b8;
+      --accent:    #2563eb;
+      --accent2:   #4f46e5;
+      --ok:        #059669;
+      --ok-bg:     #ecfdf5;
+      --warn:      #d97706;
+      --alarm:     #dc2626;
+      --alarm-bg:  #fef2f2;
+      --purple:    #7c3aed;
+      --teal:      #0d9488;
       --radius:    10px;
-    } */
-     :root {
-        /* Backgrounds: From Lightest to Slightly Grayer */
-        --bg:        #ffffff; /* Pure white main background */
-        --bg2:       #f8fafc; /* Very light gray for sidebars/cards */
-        --bg3:       #f1f5f9; /* Slightly darker gray for hovering/sections */
-        
-        /* Borders and Dividers */
-        --border:    #e2e8f0; /* Subtle border color */
-        
-        /* Text: High Contrast for Readability */
-        --text:      #0f172a; /* Near-black for main headings/body */
-        --text2:     #475569; /* Slate gray for secondary text */
-        --text3:     #94a3b8; /* Lighter gray for disabled or captions */
-        
-        /* Accents and Status */
-        --accent:    #2563eb; /* Primary Blue (darkened slightly for light bg) */
-        --accent2:   #4f46e5; /* Indigo */
-        --ok:        #059669; /* Emerald Green */
-        --warn:      #d97706; /* Amber/Orange */
-        --alarm:     #dc2626; /* Deep Red */
-        --purple:    #7c3aed; /* Violet */
-        --teal:      #0d9488; /* Darker Teal */
-        
-        --radius:    10px;
-      }
+    }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -62,18 +40,79 @@
       overflow-x: hidden;
     }
 
-    /* ── Top bar ─────────────────────────────────────────────────────────── */
+    /* ── ATTACK ALERT BANNER ─────────────────────────────────────── */
+    .alert-banner {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 14px 24px;
+      background: linear-gradient(90deg, #dc2626, #ef4444, #dc2626);
+      background-size: 200% 100%;
+      animation: alert-gradient 2s ease infinite, alert-pulse-bg 1s ease-in-out infinite;
+      color: #fff;
+      font-size: 20px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      box-shadow: 0 4px 20px rgba(220,38,38,0.4);
+      text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .alert-banner.visible {
+      display: flex;
+    }
+
+    .alert-banner .alert-icon {
+      font-size: 28px;
+      animation: alert-shake 0.5s ease-in-out infinite;
+    }
+
+    .alert-banner .alert-text {
+      animation: alert-blink 1s step-end infinite;
+    }
+
+    @keyframes alert-gradient {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    @keyframes alert-pulse-bg {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.85; }
+    }
+
+    @keyframes alert-shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-3px) rotate(-5deg); }
+      75% { transform: translateX(3px) rotate(5deg); }
+    }
+
+    @keyframes alert-blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    /* ── Top bar ─────────────────────────────────────────────────── */
     .topbar {
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 12px 24px;
-      background: var(--bg2);
+      background: var(--bg);
       border-bottom: 1px solid var(--border);
       position: sticky;
       top: 0;
       z-index: 100;
-      backdrop-filter: blur(10px);
+    }
+
+    .alert-banner.visible ~ .topbar,
+    .alert-banner.visible ~ .main {
+      /* Push content below alert */
     }
 
     .topbar-brand {
@@ -83,15 +122,16 @@
     }
 
     .brand-icon {
-      width: 36px; height: 36px;
+      width: 40px; height: 40px;
       background: linear-gradient(135deg, var(--accent), var(--accent2));
-      border-radius: 8px;
+      border-radius: 10px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 18px;
+      font-size: 20px;
+      box-shadow: 0 2px 8px rgba(37,99,235,0.2);
     }
 
-    .brand-title { font-size: 15px; font-weight: 700; color: var(--text); }
-    .brand-sub   { font-size: 10px; color: var(--text2); letter-spacing: .5px; margin-top: 1px; }
+    .brand-title { font-size: 16px; font-weight: 800; color: var(--text); }
+    .brand-sub   { font-size: 10px; color: var(--text2); letter-spacing: .5px; margin-top: 2px; font-weight: 500; }
 
     .topbar-status {
       display: flex;
@@ -103,23 +143,23 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      padding: 5px 14px;
+      padding: 6px 16px;
       border-radius: 20px;
       font-size: 11px;
-      font-weight: 700;
-      letter-spacing: .5px;
-      border: 1.5px solid;
+      font-weight: 800;
+      letter-spacing: .6px;
+      border: 2px solid;
       transition: all .3s;
     }
 
-    .badge-normal { color: var(--ok);    border-color: var(--ok);    background: rgba(16,185,129,.1); }
-    .badge-attack { color: var(--alarm); border-color: var(--alarm); background: rgba(239,68,68,.1);
-                    animation: flash-border 1s ease-in-out infinite; }
-    .badge-warn   { color: var(--warn);  border-color: var(--warn);  background: rgba(245,158,11,.1); }
+    .badge-normal { color: var(--ok); border-color: var(--ok); background: var(--ok-bg); }
+    .badge-attack { color: #fff; border-color: var(--alarm); background: var(--alarm);
+                    animation: badge-flash 0.8s ease-in-out infinite; }
+    .badge-warn   { color: var(--warn); border-color: var(--warn); background: #fffbeb; }
 
-    @keyframes flash-border {
-      0%,100% { box-shadow: 0 0 6px rgba(239,68,68,.4); }
-      50%      { box-shadow: 0 0 18px rgba(239,68,68,.8); }
+    @keyframes badge-flash {
+      0%,100% { box-shadow: 0 0 8px rgba(220,38,38,.4); }
+      50%     { box-shadow: 0 0 24px rgba(220,38,38,.8); transform: scale(1.05); }
     }
 
     .led {
@@ -127,7 +167,7 @@
       animation: led-pulse 2s ease-in-out infinite;
     }
     .led-ok   { background: var(--ok);    box-shadow: 0 0 6px var(--ok); }
-    .led-alarm{ background: var(--alarm); box-shadow: 0 0 6px var(--alarm); animation: led-fast 0.6s ease-in-out infinite; }
+    .led-alarm{ background: var(--alarm); box-shadow: 0 0 6px var(--alarm); animation: led-fast 0.5s ease-in-out infinite; }
     .led-off  { background: var(--text3); box-shadow: none; animation: none; }
 
     @keyframes led-pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
@@ -136,11 +176,12 @@
     .ws-pill {
       display: flex; align-items: center; gap: 6px;
       font-size: 10px; color: var(--text2);
-      padding: 4px 10px; border-radius: 12px;
+      padding: 5px 12px; border-radius: 14px;
       background: var(--bg3); border: 1px solid var(--border);
+      font-weight: 500;
     }
 
-    /* ── Layout ──────────────────────────────────────────────────────────── */
+    /* ── Layout ──────────────────────────────────────────────────── */
     .main {
       display: grid;
       grid-template-columns: 280px 1fr 320px;
@@ -148,14 +189,13 @@
       gap: 0;
     }
 
-    /* ── Sidebar left — Attack Injection ─────────────────────────────────── */
+    /* ── Sidebar left ────────────────────────────────────────────── */
     .sidebar-left {
       background: var(--bg2);
       border-right: 1px solid var(--border);
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      gap: 0;
     }
 
     .sb-section {
@@ -173,18 +213,17 @@
       display: flex; align-items: center; gap: 6px;
     }
 
-    /* Attack selector */
     .attack-selector {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 5px;
     }
 
     .attack-opt {
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 9px 12px;
+      padding: 8px 12px;
       border-radius: 8px;
       cursor: pointer;
       border: 1.5px solid transparent;
@@ -194,13 +233,12 @@
       font-weight: 500;
     }
 
-    .attack-opt:hover { border-color: var(--border); background: #1e2d47; }
+    .attack-opt:hover { border-color: var(--border); background: #e2e8f0; }
 
     .attack-opt.selected {
       border-color: var(--alarm);
-      background: rgba(239,68,68,.08);
+      background: var(--alarm-bg);
     }
-
     .attack-opt.selected .ao-dot { background: var(--alarm); box-shadow: 0 0 8px var(--alarm); }
 
     .ao-dot {
@@ -214,10 +252,9 @@
     .ao-id    { font-size: 9px; color: var(--text3); font-family: 'JetBrains Mono', monospace; }
 
     .normal-opt .ao-dot { background: var(--ok); }
-    .normal-opt { border-color: transparent; }
-    .normal-opt.selected { border-color: var(--ok); background: rgba(16,185,129,.08); }
+    .normal-opt.selected { border-color: var(--ok); background: var(--ok-bg); }
+    .normal-opt.selected .ao-dot { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
 
-    /* Inject / Clear buttons */
     .btn-inject {
       width: 100%;
       padding: 10px;
@@ -235,25 +272,23 @@
     .btn-inject-attack {
       background: linear-gradient(135deg, #dc2626, #ef4444);
       color: #fff;
-      box-shadow: 0 4px 12px rgba(220,38,38,.3);
+      box-shadow: 0 4px 12px rgba(220,38,38,.25);
     }
-    .btn-inject-attack:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(220,38,38,.5); }
+    .btn-inject-attack:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(220,38,38,.4); }
 
     .btn-inject-clear {
-      background: var(--bg3);
+      background: var(--bg);
       color: var(--ok);
-      border: 1.5px solid var(--ok);
+      border: 2px solid var(--ok);
       margin-top: 6px;
     }
-    .btn-inject-clear:hover { background: rgba(16,185,129,.1); }
+    .btn-inject-clear:hover { background: var(--ok-bg); }
 
-    .ws-connect-row {
-      display: flex; gap: 6px;
-    }
+    .ws-connect-row { display: flex; gap: 6px; }
     .ws-url-input {
       flex: 1;
-      background: var(--bg3);
-      border: 1px solid var(--border);
+      background: var(--bg);
+      border: 1.5px solid var(--border);
       border-radius: 6px;
       color: var(--text);
       font-size: 10px;
@@ -261,13 +296,13 @@
       padding: 6px 8px;
       outline: none;
     }
-    .ws-url-input:focus { border-color: var(--accent); }
+    .ws-url-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
 
     .btn-sm {
       padding: 6px 12px;
       border-radius: 6px;
-      border: 1px solid var(--border);
-      background: var(--bg3);
+      border: 1.5px solid var(--border);
+      background: var(--bg);
       color: var(--text);
       font-size: 10px;
       font-weight: 600;
@@ -276,9 +311,8 @@
       transition: all .15s;
     }
     .btn-sm:hover { border-color: var(--accent); color: var(--accent); }
-    .btn-sm.active { border-color: var(--alarm); color: var(--alarm); }
+    .btn-sm.active { border-color: var(--alarm); color: var(--alarm); background: var(--alarm-bg); }
 
-    /* Event log */
     .elog {
       flex: 1;
       overflow-y: auto;
@@ -290,17 +324,17 @@
     .ev {
       display: flex; gap: 8px; align-items: flex-start;
       padding: 5px 16px;
-      border-bottom: 1px solid rgba(30,45,71,.5);
+      border-bottom: 1px solid var(--border);
       font-size: 10px;
       line-height: 1.4;
     }
     .ev-t  { color: var(--text3); min-width: 52px; font-family: 'JetBrains Mono', monospace; flex-shrink: 0; }
     .ev-m  { color: var(--text2); }
-    .ev.crit .ev-m { color: var(--alarm); font-weight: 600; }
+    .ev.crit .ev-m { color: var(--alarm); font-weight: 700; }
     .ev.warn .ev-m { color: var(--warn);  font-weight: 600; }
-    .ev.info .ev-m { color: var(--ok);    }
+    .ev.info .ev-m { color: var(--ok); }
 
-    /* ── Centre — ML Results ─────────────────────────────────────────────── */
+    /* ── Centre — ML Results ─────────────────────────────────────── */
     .centre {
       overflow-y: auto;
       padding: 20px;
@@ -309,10 +343,50 @@
       gap: 16px;
     }
 
+    /* Classification badge */
+    .classification-display {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 16px;
+      border-radius: var(--radius);
+      border: 2px solid var(--border);
+      background: var(--bg);
+      transition: all .4s ease;
+    }
+
+    .classification-display.is-normal {
+      border-color: var(--ok);
+      background: var(--ok-bg);
+    }
+
+    .classification-display.is-attack {
+      border-color: var(--alarm);
+      background: var(--alarm-bg);
+      animation: class-attack-pulse 1s ease-in-out infinite;
+    }
+
+    @keyframes class-attack-pulse {
+      0%,100% { box-shadow: 0 0 12px rgba(220,38,38,.2); }
+      50% { box-shadow: 0 0 30px rgba(220,38,38,.5); }
+    }
+
+    .class-label {
+      font-size: 32px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      transition: color .3s;
+    }
+    .class-label.normal { color: var(--ok); }
+    .class-label.attack { color: var(--alarm); }
+
+    .class-icon { font-size: 36px; }
+
     /* Verdict hero card */
     .verdict-hero {
-      background: var(--bg2);
-      border: 1px solid var(--border);
+      background: var(--bg);
+      border: 1.5px solid var(--border);
       border-radius: var(--radius);
       padding: 24px 28px;
       display: flex;
@@ -320,24 +394,18 @@
       gap: 24px;
       position: relative;
       overflow: hidden;
-      transition: border-color .3s;
+      transition: all .3s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
 
     .verdict-hero.is-attack {
       border-color: var(--alarm);
-      background: linear-gradient(135deg, rgba(239,68,68,.06), var(--bg2));
-    }
-
-    .verdict-hero::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(135deg, transparent 60%, rgba(59,130,246,.03));
-      pointer-events: none;
+      background: var(--alarm-bg);
+      box-shadow: 0 4px 16px rgba(220,38,38,.15);
     }
 
     .verdict-icon {
-      font-size: 52px;
+      font-size: 48px;
       line-height: 1;
       flex-shrink: 0;
     }
@@ -345,7 +413,7 @@
     .verdict-text-group { flex: 1; }
 
     .verdict-label {
-      font-size: 28px;
+      font-size: 26px;
       font-weight: 800;
       letter-spacing: -.5px;
       line-height: 1;
@@ -353,7 +421,7 @@
     }
     .verdict-label.normal  { color: var(--ok); }
     .verdict-label.attack  { color: var(--alarm); }
-    .verdict-label.warmup  { color: var(--text2); }
+    .verdict-label.warmup  { color: var(--text3); }
 
     .verdict-sublabel {
       font-size: 13px;
@@ -375,8 +443,8 @@
     }
 
     .prob-val {
-      font-size: 48px;
-      font-weight: 800;
+      font-size: 44px;
+      font-weight: 900;
       font-variant-numeric: tabular-nums;
       line-height: 1;
       transition: color .3s;
@@ -385,7 +453,7 @@
     .prob-val.mid   { color: var(--warn); }
     .prob-val.low   { color: var(--ok); }
 
-    .prob-label { font-size: 10px; color: var(--text2); text-align: center; margin-top: 4px; letter-spacing:.4px; }
+    .prob-label { font-size: 10px; color: var(--text2); text-align: center; margin-top: 4px; letter-spacing:.4px; font-weight: 600; }
 
     /* Layer cards */
     .layer-grid {
@@ -395,15 +463,16 @@
     }
 
     .layer-card {
-      background: var(--bg2);
-      border: 1px solid var(--border);
+      background: var(--bg);
+      border: 1.5px solid var(--border);
       border-radius: var(--radius);
       padding: 16px;
-      transition: border-color .3s;
+      transition: all .3s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
 
-    .layer-card.flagged { border-color: var(--alarm); }
-    .layer-card.clear   { border-color: var(--ok); }
+    .layer-card.flagged { border-color: var(--alarm); background: var(--alarm-bg); }
+    .layer-card.clear   { border-color: var(--ok); background: var(--ok-bg); }
 
     .layer-title {
       font-size: 9px;
@@ -417,23 +486,23 @@
 
     .layer-flag {
       font-size: 9px;
-      font-weight: 700;
-      padding: 2px 8px;
+      font-weight: 800;
+      padding: 2px 10px;
       border-radius: 10px;
     }
-    .flag-ok  { background: rgba(16,185,129,.15); color: var(--ok); }
-    .flag-alm { background: rgba(239,68,68,.15);  color: var(--alarm); }
+    .flag-ok  { background: var(--ok-bg); color: var(--ok); border: 1px solid rgba(5,150,105,0.2); }
+    .flag-alm { background: var(--alarm-bg); color: var(--alarm); border: 1px solid rgba(220,38,38,0.2); }
 
     .layer-score {
-      font-size: 32px;
-      font-weight: 800;
+      font-size: 30px;
+      font-weight: 900;
       font-variant-numeric: tabular-nums;
       line-height: 1.1;
       transition: color .3s;
     }
 
     .layer-bar-track {
-      height: 5px;
+      height: 6px;
       background: var(--bg3);
       border-radius: 3px;
       margin: 8px 0 4px;
@@ -445,14 +514,15 @@
       transition: width .5s ease, background .3s;
     }
 
-    .layer-sub { font-size: 9px; color: var(--text3); }
+    .layer-sub { font-size: 9px; color: var(--text3); font-weight: 500; }
 
-    /* Anomaly score chart */
+    /* Chart panel */
     .chart-panel {
-      background: var(--bg2);
-      border: 1px solid var(--border);
+      background: var(--bg);
+      border: 1.5px solid var(--border);
       border-radius: var(--radius);
       padding: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
 
     .chart-panel-hdr {
@@ -475,29 +545,30 @@
     .vote-cell {
       flex: 1;
       background: var(--bg3);
-      border: 1.5px solid var(--border);
-      border-radius: 6px;
+      border: 2px solid var(--border);
+      border-radius: 8px;
       padding: 8px;
       text-align: center;
       font-size: 9px;
       color: var(--text3);
       transition: all .3s;
+      font-weight: 600;
     }
 
     .vote-cell.active {
       border-color: var(--alarm);
-      background: rgba(239,68,68,.1);
+      background: var(--alarm-bg);
       color: var(--alarm);
     }
 
     .vote-val {
       font-size: 22px;
-      font-weight: 800;
+      font-weight: 900;
       display: block;
       line-height: 1.2;
     }
 
-    /* ── Right sidebar — Sensor Data ─────────────────────────────────────── */
+    /* ── Right sidebar ──────────────────────────────────────────── */
     .sidebar-right {
       background: var(--bg2);
       border-left: 1px solid var(--border);
@@ -525,18 +596,17 @@
       justify-content: space-between;
       align-items: center;
       padding: 5px 0;
-      border-bottom: 1px solid rgba(30,45,71,.5);
+      border-bottom: 1px solid var(--border);
       font-size: 11px;
     }
     .sensor-row:last-child { border-bottom: none; }
 
-    .sensor-name { color: var(--text2); font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+    .sensor-name { color: var(--text2); font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 500; }
     .sensor-val  { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
-    .sensor-val.alarm { color: var(--alarm); }
+    .sensor-val.alarm { color: var(--alarm); font-weight: 800; }
     .sensor-val.warn  { color: var(--warn); }
     .sensor-val.ok    { color: var(--ok); }
 
-    /* Actuator coil chips */
     .coil-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -545,26 +615,26 @@
 
     .coil-chip {
       padding: 5px 4px;
-      border-radius: 5px;
+      border-radius: 6px;
       text-align: center;
       font-size: 8px;
       font-weight: 700;
       font-family: 'JetBrains Mono', monospace;
-      border: 1px solid;
+      border: 1.5px solid;
       transition: all .25s;
       letter-spacing: .2px;
     }
 
-    .coil-on  { background: rgba(59,130,246,.12); border-color: rgba(59,130,246,.4); color: #60a5fa; }
+    .coil-on  { background: rgba(37,99,235,.08); border-color: rgba(37,99,235,.3); color: var(--accent); }
     .coil-off { background: var(--bg3); border-color: var(--border); color: var(--text3); }
 
-    /* ── Footer bar ──────────────────────────────────────────────────────── */
+    /* ── Footer ──────────────────────────────────────────────────── */
     .footer {
       display: flex;
       align-items: center;
       gap: 6px;
       padding: 5px 24px;
-      background: var(--bg2);
+      background: var(--bg);
       border-top: 1px solid var(--border);
       font-size: 9px;
       color: var(--text3);
@@ -582,13 +652,20 @@
 
 <body>
 
+<!-- ── ATTACK ALERT BANNER ──────────────────────────────────────── -->
+<div class="alert-banner" id="alert-banner">
+  <span class="alert-icon">🚨</span>
+  <span class="alert-text">⚠️ ALERT!! ATTACK DETECTED ⚠️</span>
+  <span class="alert-icon">🚨</span>
+</div>
+
 <!-- Top bar -->
-<div class="topbar">
+<div class="topbar" id="topbar">
   <div class="topbar-brand">
     <div class="brand-icon">🛡️</div>
     <div>
       <div class="brand-title">SWaT ML Anomaly Detection</div>
-      <div class="brand-sub">3-LAYER ENSEMBLE · ISOLATION FOREST → XGBOOST → LSTM</div>
+      <div class="brand-sub">BINARY CLASSIFICATION · ENSEMBLE LEARNING PIPELINE</div>
     </div>
   </div>
   <div class="topbar-status">
@@ -606,7 +683,7 @@
 <!-- Main layout -->
 <div class="main">
 
-  <!-- ── LEFT SIDEBAR: Attack Injection ─────────────────────────────────── -->
+  <!-- ── LEFT SIDEBAR ────────────────────────────────────────────── -->
   <div class="sidebar-left">
 
     <!-- WebSocket connect -->
@@ -617,7 +694,7 @@
         <button class="btn-sm" id="ws-btn" onclick="toggleWS()">Connect</button>
       </div>
       <div style="font-size:9px;color:var(--text3);margin-top:8px;" id="ws-status-txt">
-        Run: <code style="color:var(--accent)">python swat_realtime_inference.py</code>
+        Run: <code style="color:var(--accent)">python swat_realtime_inference.py --demo</code>
       </div>
     </div>
 
@@ -629,68 +706,28 @@
         <div class="attack-opt normal-opt selected" data-attack="Normal" onclick="selectAttack(this)">
           <div class="ao-dot"></div>
           <span class="ao-name">Normal Operation</span>
-          <span class="ao-id">ID:0</span>
-        </div>
-
-        <div class="attack-opt" data-attack="Reconnaissance" onclick="selectAttack(this)">
-          <div class="ao-dot"></div>
-          <span class="ao-name">Reconnaissance</span>
-          <span class="ao-id">ID:1</span>
-        </div>
-
-        <div class="attack-opt" data-attack="Replay Attack" onclick="selectAttack(this)">
-          <div class="ao-dot"></div>
-          <span class="ao-name">Replay Attack</span>
-          <span class="ao-id">ID:2</span>
         </div>
 
         <div class="attack-opt" data-attack="pH Manipulation" onclick="selectAttack(this)">
           <div class="ao-dot"></div>
           <span class="ao-name">pH Manipulation</span>
-          <span class="ao-id">ID:3</span>
         </div>
 
         <div class="attack-opt" data-attack="Slow Ramp" onclick="selectAttack(this)">
           <div class="ao-dot"></div>
-          <span class="ao-name">Slow Ramp</span>
-          <span class="ao-id">ID:4</span>
-        </div>
-
-        <div class="attack-opt" data-attack="Pump Failure" onclick="selectAttack(this)">
-          <div class="ao-dot"></div>
-          <span class="ao-name">Pump Failure</span>
-          <span class="ao-id">ID:5</span>
+          <span class="ao-name">Slow Ramp Attack</span>
         </div>
 
         <div class="attack-opt" data-attack="Valve Manipulation" onclick="selectAttack(this)">
           <div class="ao-dot"></div>
           <span class="ao-name">Valve Manipulation</span>
-          <span class="ao-id">ID:6</span>
         </div>
 
         <div class="attack-opt" data-attack="Multi-Stage" onclick="selectAttack(this)">
           <div class="ao-dot"></div>
-          <span class="ao-name">Multi-Stage</span>
-          <span class="ao-id">ID:7</span>
+          <span class="ao-name">Multi-Stage Attack</span>
         </div>
 
-        <div class="attack-opt" data-attack="Sensor Spoofing" onclick="selectAttack(this)">
-          <div class="ao-dot"></div>
-          <span class="ao-name">Sensor Spoofing</span>
-          <span class="ao-id">ID:8</span>
-        </div>
-
-        <div class="attack-opt" data-attack="DoS Attack" onclick="selectAttack(this)">
-          <div class="ao-dot"></div>
-          <span class="ao-name">DoS Attack</span>
-          <span class="ao-id">ID:9</span>
-        </div>
-
-        <div class="attack-opt" data-attack="Covert Channel" onclick="selectAttack(this)">
-          <div class="ao-dot"></div>
-          <span class="ao-name">Covert Channel</span>
-          <span class="ao-id">ID:10</span>
-        </div>
       </div>
 
       <button class="btn-inject btn-inject-attack" id="btn-inject" onclick="injectAttack()">
@@ -712,8 +749,15 @@
 
   </div>
 
-  <!-- ── CENTRE: ML Results ──────────────────────────────────────────────── -->
+  <!-- ── CENTRE: ML Results ──────────────────────────────────────── -->
   <div class="centre">
+
+    <!-- Binary classification display -->
+    <div class="classification-display is-normal" id="class-display">
+      <span class="class-icon" id="class-icon">🛡️</span>
+      <span class="class-label normal" id="class-label">NORMAL</span>
+      <span class="class-icon" id="class-icon-right">✅</span>
+    </div>
 
     <!-- Verdict hero -->
     <div class="verdict-hero" id="verdict-hero">
@@ -731,7 +775,7 @@
 
     <!-- Vote indicator -->
     <div class="chart-panel" style="padding:14px 16px">
-      <div class="chart-panel-hdr">🗳️ Majority Vote (≥ 2 of 3 layers must flag)</div>
+      <div class="chart-panel-hdr">🗳️ Ensemble Majority Vote (≥ 2 of 3 layers must flag)</div>
       <div class="vote-row">
         <div class="vote-cell" id="vote-l1">
           <span class="vote-val" id="vote-l1-val">0</span>
@@ -767,7 +811,7 @@
           <div class="layer-bar-fill" id="bar-l1"
                style="width:0%;background:var(--ok)"></div>
         </div>
-        <div class="layer-sub">Anomaly score — threshold: <span id="thresh-l1">0.60</span></div>
+        <div class="layer-sub">Anomaly score — threshold: <span id="thresh-l1">0.40</span></div>
       </div>
 
       <!-- Layer 2: XGBoost -->
@@ -781,13 +825,13 @@
           <div class="layer-bar-fill" id="bar-l2"
                style="width:0%;background:var(--ok)"></div>
         </div>
-        <div class="layer-sub">Attack probability — threshold: <span id="thresh-l2">0.50</span></div>
+        <div class="layer-sub">Attack probability — threshold: <span id="thresh-l2">0.27</span></div>
       </div>
 
-      <!-- Layer 3: LSTM -->
+      <!-- Layer 3: CNN-BiLSTM -->
       <div class="layer-card" id="card-l3">
         <div class="layer-title">
-          LAYER 3 · LSTM (BI-DIR)
+          LAYER 3 · CNN-BiLSTM
           <span class="layer-flag flag-ok" id="flag-l3">PASS</span>
         </div>
         <div class="layer-score" id="score-l3" style="color:var(--ok)">0.00</div>
@@ -795,7 +839,7 @@
           <div class="layer-bar-fill" id="bar-l3"
                style="width:0%;background:var(--ok)"></div>
         </div>
-        <div class="layer-sub">Sequence attack prob (30-step window)</div>
+        <div class="layer-sub">Sequence attack probability (150-step window)</div>
       </div>
 
     </div>
@@ -808,12 +852,11 @@
 
   </div>
 
-  <!-- ── RIGHT SIDEBAR: Live Sensor Data ────────────────────────────────── -->
+  <!-- ── RIGHT SIDEBAR ──────────────────────────────────────────── -->
   <div class="sidebar-right">
 
     <div class="sensor-section">
       <div class="sensor-section-title">📡 Tank Levels</div>
-
       <div class="sensor-row">
         <span class="sensor-name">LIT-101</span>
         <span class="sensor-val" id="sv-lit101">—</span>
@@ -834,7 +877,6 @@
 
     <div class="sensor-section">
       <div class="sensor-section-title">🌊 Flow & Pressure</div>
-
       <div class="sensor-row">
         <span class="sensor-name">FIT-101</span>
         <span class="sensor-val" id="sv-fit101">—</span>
@@ -863,7 +905,6 @@
 
     <div class="sensor-section">
       <div class="sensor-section-title">🧪 Chemistry</div>
-
       <div class="sensor-row">
         <span class="sensor-name">AIT-202 (pH)</span>
         <span class="sensor-val" id="sv-ait202">—</span>
@@ -915,7 +956,7 @@
   <span class="footer-sep">|</span>
   <span>ML Server: <span id="footer-ws">ws://localhost:8766</span></span>
   <span class="footer-sep">|</span>
-  <span>Digital Twin Stream: ws://localhost:8765</span>
+  <span>Binary Classification: Normal / Attack</span>
   <span class="footer-sep">|</span>
   <span id="footer-status">Not connected</span>
 </div>
@@ -928,11 +969,12 @@ let ws = null;
 let selectedAttack = 'Normal';
 let detectionCount = 0;
 let frameCount     = 0;
-let probHistory    = [];   // {t, prob, is_attack}
-const MAX_HIST     = 1200; // 120 s at 10 Hz
+let probHistory    = [];
+const MAX_HIST     = 1200;
+let wasAttack      = false;  // track previous state for alert transitions
 
 /* ============================================================
-   Chart.js — attack probability time-series
+   Chart.js
    ============================================================ */
 const ctx = document.getElementById('prob-chart').getContext('2d');
 const probChart = new Chart(ctx, {
@@ -943,9 +985,9 @@ const probChart = new Chart(ctx, {
       {
         label: 'Ensemble Attack Prob',
         data: [],
-        borderColor: '#3b82f6',
-        backgroundColor: 'rgba(59,130,246,.08)',
-        borderWidth: 1.5,
+        borderColor: '#2563eb',
+        backgroundColor: 'rgba(37,99,235,.06)',
+        borderWidth: 2,
         pointRadius: 0,
         fill: true,
         tension: 0.3,
@@ -953,18 +995,17 @@ const probChart = new Chart(ctx, {
       {
         label: 'XGBoost',
         data: [],
-        borderColor: '#8b5cf6',
-        borderWidth: 1,
+        borderColor: '#7c3aed',
+        borderWidth: 1.5,
         pointRadius: 0,
         fill: false,
         tension: 0.3,
-        borderDash: [],
       },
       {
-        label: 'LSTM',
+        label: 'CNN-BiLSTM',
         data: [],
-        borderColor: '#14b8a6',
-        borderWidth: 1,
+        borderColor: '#0d9488',
+        borderWidth: 1.5,
         pointRadius: 0,
         fill: false,
         tension: 0.3,
@@ -976,18 +1017,16 @@ const probChart = new Chart(ctx, {
     responsive: true,
     maintainAspectRatio: false,
     scales: {
-      x: {
-        display: false,
-      },
+      x: { display: false },
       y: {
         min: 0, max: 1,
-        ticks: { color: '#475569', font: { size: 9 }, stepSize: 0.25 },
-        grid:  { color: 'rgba(30,45,71,.6)' },
+        ticks: { color: '#94a3b8', font: { size: 9, family: 'Inter' }, stepSize: 0.25 },
+        grid:  { color: '#e2e8f0' },
       },
     },
     plugins: {
       legend: {
-        labels: { color: '#94a3b8', font: { size: 9 }, boxWidth: 10, padding: 12 },
+        labels: { color: '#475569', font: { size: 9, family: 'Inter' }, boxWidth: 10, padding: 12 },
       },
       tooltip: { enabled: false },
     },
@@ -1060,7 +1099,6 @@ function send(obj) {
 function handleMLResult(d) {
   frameCount++;
 
-  // ── Verdict hero ───────────────────────────────────────────────────────
   const hero    = document.getElementById('verdict-hero');
   const icon    = document.getElementById('verdict-icon');
   const label   = document.getElementById('verdict-label');
@@ -1070,9 +1108,13 @@ function handleMLResult(d) {
   const badge   = document.getElementById('verdict-badge');
   const badgeTxt= document.getElementById('verdict-badge-txt');
   const badgeLed= document.getElementById('verdict-led');
+  const alertBanner = document.getElementById('alert-banner');
+  const classDisplay = document.getElementById('class-display');
+  const classLabel = document.getElementById('class-label');
+  const classIcon = document.getElementById('class-icon');
+  const classIconRight = document.getElementById('class-icon-right');
 
   if (!d.ready) {
-    // Still warming up (LSTM buffer not full)
     label.textContent  = 'Warming Up...';
     label.className    = 'verdict-label warmup';
     icon.textContent   = '⏳';
@@ -1080,12 +1122,31 @@ function handleMLResult(d) {
     probEl.textContent = '—';
     probEl.className   = 'prob-val low';
     document.getElementById('stat-buffer').textContent = 'Filling...';
+    classLabel.textContent = 'INITIALIZING';
+    classLabel.className = 'class-label';
+    classLabel.style.color = 'var(--text3)';
+    classIcon.textContent = '⏳';
+    classIconRight.textContent = '';
+    classDisplay.className = 'classification-display';
   } else {
     const atkProb = d.attack_prob || 0;
     const pct     = (atkProb * 100).toFixed(1);
 
     if (d.is_attack) {
       detectionCount++;
+
+      // ── ALERT BANNER — Big red bold alert ────────────────────────
+      alertBanner.classList.add('visible');
+
+      // ── Classification display ───────────────────────────────────
+      classLabel.textContent = '⚠️ ATTACK DETECTED';
+      classLabel.className = 'class-label attack';
+      classLabel.style.color = '';
+      classIcon.textContent = '🚨';
+      classIconRight.textContent = '🚨';
+      classDisplay.className = 'classification-display is-attack';
+
+      // ── Verdict hero ─────────────────────────────────────────────
       label.textContent  = d.attack_name || 'ATTACK DETECTED';
       label.className    = 'verdict-label attack';
       sub.textContent    = `${d.verdict} — Vote: ${d.vote_sum}/3 layers flagged`;
@@ -1095,7 +1156,24 @@ function handleMLResult(d) {
       badgeTxt.textContent = '⚡ ATTACK';
       badgeLed.className = 'led led-alarm';
       probEl.className   = 'prob-val high';
+
+      // Log attack detection on first detection
+      if (!wasAttack) {
+        logEv(`🚨 ATTACK DETECTED: ${d.attack_name || 'Unknown'} — Prob: ${pct}%`, 'crit');
+      }
+      wasAttack = true;
+
     } else {
+      // ── Normal operation ─────────────────────────────────────────
+      alertBanner.classList.remove('visible');
+
+      classLabel.textContent = 'NORMAL';
+      classLabel.className = 'class-label normal';
+      classLabel.style.color = '';
+      classIcon.textContent = '🛡️';
+      classIconRight.textContent = '✅';
+      classDisplay.className = 'classification-display is-normal';
+
       label.textContent  = 'Normal';
       label.className    = 'verdict-label normal';
       sub.textContent    = `System operating normally — Vote: ${d.vote_sum}/3`;
@@ -1105,27 +1183,32 @@ function handleMLResult(d) {
       badgeTxt.textContent = 'NORMAL';
       badgeLed.className = 'led led-ok';
       probEl.className   = atkProb > 0.4 ? 'prob-val mid' : 'prob-val low';
+
+      if (wasAttack) {
+        logEv('✅ System returned to NORMAL operation', 'info');
+      }
+      wasAttack = false;
     }
 
     probEl.textContent = pct + '%';
     meta.textContent   = `IF:${(d.layer1_score||0).toFixed(3)}  XGB:${(d.layer2_prob||0).toFixed(3)}  LSTM:${(d.layer3_prob||0).toFixed(3)}  |  ${d.timestamp || ''}`;
     document.getElementById('stat-buffer').textContent = 'Ready ✅';
 
-    // ── Layer cards ──────────────────────────────────────────────────────
-    updateLayer('l1', d.layer1_score || 0, d.layer1_flag || 0, 'Anomaly score');
-    updateLayer('l2', d.layer2_prob  || 0, d.layer2_flag || 0, 'Attack prob');
-    updateLayer('l3', d.layer3_prob  || 0, d.layer3_flag || 0, 'Seq attack prob');
+    // ── Layer cards ──────────────────────────────────────────────
+    updateLayer('l1', d.layer1_score || 0, d.layer1_flag || 0);
+    updateLayer('l2', d.layer2_prob  || 0, d.layer2_flag || 0);
+    updateLayer('l3', d.layer3_prob  || 0, d.layer3_flag || 0);
 
-    // ── Vote cells ───────────────────────────────────────────────────────
-    updateVote('vote-l1', d.layer1_flag || 0, 'Layer 1 · IF');
-    updateVote('vote-l2', d.layer2_flag || 0, 'Layer 2 · XGB');
-    updateVote('vote-l3', d.layer3_flag || 0, 'Layer 3 · LSTM');
+    // ── Vote cells ───────────────────────────────────────────────
+    updateVote('vote-l1', d.layer1_flag || 0);
+    updateVote('vote-l2', d.layer2_flag || 0);
+    updateVote('vote-l3', d.layer3_flag || 0);
     const totalEl = document.getElementById('vote-total');
     const totalValEl = document.getElementById('vote-total-val');
     totalValEl.textContent = `${d.vote_sum}/3`;
     totalEl.className = d.vote_sum >= 2 ? 'vote-cell active' : 'vote-cell';
 
-    // ── Chart ────────────────────────────────────────────────────────────
+    // ── Chart ────────────────────────────────────────────────────
     probHistory.push({
       t: d.timestamp || '',
       prob: atkProb,
@@ -1134,18 +1217,17 @@ function handleMLResult(d) {
     });
     if (probHistory.length > MAX_HIST) probHistory.shift();
 
-    // Update chart every 5 frames for performance
     if (frameCount % 5 === 0) {
-      const labels   = probHistory.map(p => p.t);
-      probChart.data.labels               = labels;
-      probChart.data.datasets[0].data     = probHistory.map(p => p.prob);
-      probChart.data.datasets[1].data     = probHistory.map(p => p.xgb);
-      probChart.data.datasets[2].data     = probHistory.map(p => p.lstm);
+      const labels = probHistory.map(p => p.t);
+      probChart.data.labels           = labels;
+      probChart.data.datasets[0].data = probHistory.map(p => p.prob);
+      probChart.data.datasets[1].data = probHistory.map(p => p.xgb);
+      probChart.data.datasets[2].data = probHistory.map(p => p.lstm);
       probChart.update('none');
     }
   }
 
-  // ── Sensor data ─────────────────────────────────────────────────────────
+  // ── Sensor data ─────────────────────────────────────────────────
   const s = d.sensor_data || {};
   const sv = (id, val, unit='', alarmFn=null) => {
     const el = document.getElementById(id);
@@ -1200,7 +1282,7 @@ function handleMLResult(d) {
 /* ============================================================
    Layer card update
    ============================================================ */
-function updateLayer(id, score, flagged, subLabel) {
+function updateLayer(id, score, flagged) {
   const card    = document.getElementById('card-'  + id);
   const scoreEl = document.getElementById('score-' + id);
   const barEl   = document.getElementById('bar-'   + id);
@@ -1228,7 +1310,7 @@ function updateLayer(id, score, flagged, subLabel) {
 /* ============================================================
    Vote cell update
    ============================================================ */
-function updateVote(id, flagged, label) {
+function updateVote(id, flagged) {
   const cell = document.getElementById(id);
   const val  = document.getElementById(id + '-val');
   if (!cell || !val) return;
@@ -1269,7 +1351,6 @@ function clearAttack() {
     logEv('Not connected — cannot clear attack', 'warn'); return;
   }
   send({ action: 'clear_attack' });
-  // Also deselect any attack, revert to Normal
   document.querySelectorAll('.attack-opt').forEach(o => o.classList.remove('selected'));
   const normalOpt = document.querySelector('[data-attack="Normal"]');
   if (normalOpt) selectAttack(normalOpt);
